@@ -21,7 +21,7 @@ if (dataNode) {
             <button type="button" class="gallery-module" data-add-module="${key}">
                 <span class="gallery-module-title"><strong>${esc(definition.name)}</strong>${definition.ai_ready ? '<em class="ai-badge">AI ready</em>' : ''}</span>
                 <span class="gallery-module-preview">
-                    <span class="gallery-module-rendered" aria-label="Filled ${esc(definition.name)} preview">${filledModulePreview(key)}</span>
+                    <img class="gallery-module-rendered" src="/images/modules/rendered/${key}.webp" alt="Filled ${esc(definition.name)} preview" loading="lazy">
                     <img class="gallery-module-form" src="/images/modules/${key}.png" alt="${esc(definition.name)} editing form" loading="lazy">
                     <span class="gallery-preview-hint">Hover: editing fields</span>
                 </span>

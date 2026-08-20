@@ -23,8 +23,12 @@
 
 /* The preview establishes the card's intrinsic height. Only the preview pane clips
    its crossfade layers; the card itself must not hide content while grid rows size. */
-.gallery-module{display:flex;min-width:0;min-height:265px;overflow:visible;flex-direction:column;padding:0}
+.gallery-module{display:flex;width:100%;min-width:0;min-height:265px;overflow:hidden;flex-direction:column;padding:0}
 .gallery-module-preview{box-sizing:border-box;display:block!important;width:100%;height:auto!important;min-height:180px;aspect-ratio:16/9;overflow:hidden;flex:0 0 auto}
+.gallery-module-rendered{object-fit:cover}
+.gallery-module-copy{box-sizing:border-box;width:100%;min-width:0;overflow:hidden;flex:1 0 auto;align-items:flex-start!important;flex-wrap:wrap}
+.gallery-module-copy small{min-width:0;flex:1 1 12rem;overflow-wrap:anywhere}
+.gallery-module-copy em{max-width:100%;overflow:hidden;text-overflow:ellipsis}
 
 .template-detail{position:relative}
 .template-detail-back{position:absolute;top:2.25rem;left:2rem}

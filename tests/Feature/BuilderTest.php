@@ -26,6 +26,7 @@ class BuilderTest extends TestCase
     {
         foreach (array_keys(app(ModuleRegistry::class)->all()) as $moduleType) {
             $this->assertFileExists(public_path('images/modules/'.$moduleType.'.png'), $moduleType.' is missing its module-card preview.');
+            $this->assertFileExists(public_path('images/modules/rendered/'.$moduleType.'.webp'), $moduleType.' is missing its finished-content preview.');
         }
     }
 
