@@ -51,7 +51,7 @@ class AdminAiTest extends TestCase
         AiSetting::create(['text_model' => 'vendor/text-model', 'image_model' => 'vendor/image-model', 'updated_by' => $admin->id]);
         Http::fake(['openrouter.test/chat/completions' => Http::response([
             'id' => 'gen-test-123',
-            'choices' => [['message' => ['content' => json_encode(['headline' => 'A new journey', 'body_html' => '<p>Begin here.</p>'])]]],
+            'choices' => [['message' => ['content' => "```json\n".json_encode(['headline' => 'A new journey', 'body_html' => '<p>Begin here.</p>'])."\n```"]]],
             'usage' => ['prompt_tokens' => 120, 'completion_tokens' => 30, 'total_tokens' => 150, 'cost' => 0.00123456],
         ], 200)]);
 
@@ -64,6 +64,9 @@ class AdminAiTest extends TestCase
             'location' => 'builder.module_copy', 'status' => 'succeeded', 'input_tokens' => 120,
             'output_tokens' => 30, 'total_tokens' => 150, 'cost_usd' => 0.00123456, 'provider_request_id' => 'gen-test-123',
         ]);
+        Http::assertSent(fn ($request) => $request->url() === 'https://openrouter.test/chat/completions'
+            && $request['model'] === 'vendor/text-model'
+            && ! isset($request['response_format']));
 
         $this->actingAs($user)->get(route('admin.ai.logs'))->assertForbidden();
         $this->actingAs($admin)->get(route('admin.ai.logs'))->assertOk()

@@ -44,18 +44,25 @@ class OpenRouterService
         $started = microtime(true);
         try {
             $response = $this->client()->post($this->endpoint('/chat/completions'), [
-                'model' => $model, 'response_format' => ['type' => 'json_object'], 'usage' => ['include' => true],
+                'model' => $model, 'usage' => ['include' => true],
                 'messages' => [
                     ['role' => 'system', 'content' => 'You write concise, truthful Amazon KDP A+ content for books. Return JSON with headline and body_html keys. Never invent awards, reviews, or claims.'],
                     ['role' => 'user', 'content' => json_encode(['request' => $prompt, 'book_context' => $context], JSON_UNESCAPED_SLASHES)],
                 ],
             ])->throw();
             $content = $response->json('choices.0.message.content', '{}');
-            $decoded = json_decode($content, true);
+            $decoded = $this->decodeJsonObject((string) $content);
             $result = is_array($decoded) ? $decoded : ['body_html' => strip_tags((string) $content)];
             $usage = $response->json('usage', []);
             $this->logCall($actor, $project, $generation, 'text', $model, $location, 'succeeded', $started, $response, $usage, null, $metadata);
             return ['data' => $result, 'model' => $model, 'usage' => $usage, 'request_id' => $response->json('id')];
+        } catch (RequestException $exception) {
+            $this->logCall($actor, $project, $generation, 'text', $model, $location, 'failed', $started, null, [], $exception, $metadata);
+            $providerMessage = $exception->response->json('error.message');
+            $message = $exception->response->status() === 404
+                ? 'The selected text model is not currently available. Ask an administrator to choose another default text model.'
+                : ($providerMessage ?: 'OpenRouter could not draft the module copy. Please try again.');
+            throw ValidationException::withMessages(['prompt' => $message]);
         } catch (\Throwable $exception) {
             $this->logCall($actor, $project, $generation, 'text', $model, $location, 'failed', $started, null, [], $exception, $metadata);
             throw $exception;
@@ -112,6 +119,26 @@ class OpenRouterService
     private function endpoint(string $path): string
     {
         return rtrim(config('services.openrouter.base_url'), '/').$path;
+    }
+
+    private function decodeJsonObject(string $content): ?array
+    {
+        $decoded = json_decode($content, true);
+        if (is_array($decoded)) return $decoded;
+
+        if (preg_match('/```(?:json)?\s*(\{.*\})\s*```/is', $content, $matches)) {
+            $decoded = json_decode($matches[1], true);
+            if (is_array($decoded)) return $decoded;
+        }
+
+        $start = strpos($content, '{');
+        $end = strrpos($content, '}');
+        if ($start !== false && $end !== false && $end > $start) {
+            $decoded = json_decode(substr($content, $start, $end - $start + 1), true);
+            if (is_array($decoded)) return $decoded;
+        }
+
+        return null;
     }
 
     private function ensureConfigured(?string $model, string $kind): void

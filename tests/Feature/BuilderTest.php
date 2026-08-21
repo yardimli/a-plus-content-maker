@@ -205,6 +205,22 @@ class BuilderTest extends TestCase
             ->assertSee('letters-at-low-tide', false);
     }
 
+    public function test_writing_partner_form_stays_open_for_generation_and_can_apply_over_existing_copy(): void
+    {
+        $user = User::factory()->create();
+        $project = Project::create(['uuid' => (string) Str::uuid(), 'user_id' => $user->id, 'name' => 'Writing partner']);
+
+        $this->actingAs($user)->get(route('projects.builder', $project))
+            ->assertOk()
+            ->assertSee('id="ai-form"', false)
+            ->assertDontSee('method="dialog" class="dialog-shell" id="ai-form"', false)
+            ->assertSee('id="ai-generate"', false);
+
+        $javascript = file_get_contents(resource_path('js/builder.js'));
+        $this->assertStringContainsString('Apply draft', $javascript);
+        $this->assertStringNotContainsString('Apply to empty fields', $javascript);
+    }
+
     public function test_series_template_clones_distinct_visual_assets_and_multi_book_slots(): void
     {
         Storage::fake('public');

@@ -366,16 +366,17 @@ if (dataNode) {
         event.preventDefault(); const submit = elements.aiForm.querySelector('[type="submit"]'); submit.disabled = true; submit.textContent = 'Writing…'; elements.aiResult.innerHTML = '';
         try {
             const payload = await window.apiFetch(state.routes.aiText, { method: 'POST', body: JSON.stringify({ prompt: elements.aiPrompt.value, module_type: state.aiModule.module_type }) }); const result = payload.data;
-            elements.aiResult.innerHTML = `<div class="validation-list"><strong>Draft ready</strong><p>${esc(result.headline || '')}</p><p>${esc(result.body_html || '')}</p><button type="button" class="button button-secondary" id="apply-ai">Apply to empty fields</button></div>`;
+            elements.aiResult.innerHTML = `<div class="validation-list"><strong>Draft ready</strong><p>${esc(result.headline || '')}</p><p>${esc(result.body_html || '')}</p><small>Applying this draft replaces the current copy in this module.</small><button type="button" class="button button-secondary" id="apply-ai">Apply draft</button></div>`;
             document.getElementById('apply-ai').addEventListener('click', () => { applyAi(state.aiModule.content, result); queueSave(state.aiModule); elements.aiDialog.close(); render(); });
         } catch (error) { elements.aiResult.innerHTML = `<span class="field-error">${esc(error.message)}</span>`; }
         finally { submit.disabled = false; submit.textContent = 'Generate draft'; }
     });
 
     function applyAi(content, result) {
-        if ('headline' in content && !content.headline && result.headline) content.headline = result.headline;
-        if ('body_html' in content && !content.body_html && result.body_html) content.body_html = result.body_html;
-        Object.values(content).filter(Array.isArray).forEach((rows) => rows.forEach((row) => { if ('headline' in row && !row.headline && result.headline) row.headline = result.headline; if ('body_html' in row && !row.body_html && result.body_html) row.body_html = result.body_html; }));
+        if ('headline' in content && result.headline) content.headline = result.headline;
+        if ('body_html' in content && result.body_html) content.body_html = result.body_html;
+        if ('description_html' in content && result.body_html) content.description_html = result.body_html;
+        Object.values(content).filter(Array.isArray).forEach((rows) => rows.forEach((row) => { if ('headline' in row && result.headline) row.headline = result.headline; if ('body_html' in row && result.body_html) row.body_html = result.body_html; }));
     }
 
     function renderPreview() {
