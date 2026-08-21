@@ -7,6 +7,7 @@ use App\Models\AiGeneration;
 use App\Models\AiSetting;
 use App\Models\Project;
 use App\Models\User;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -67,13 +68,22 @@ class OpenRouterService
         $this->ensureConfigured($model, 'image');
         $started = microtime(true);
         try {
-            $response = $this->client()->post($this->endpoint('/chat/completions'), [
-                'model' => $model, 'modalities' => ['image', 'text'], 'usage' => ['include' => true],
-                'messages' => [['role' => 'user', 'content' => $prompt]],
+            $response = $this->client(180)->post($this->endpoint('/images'), [
+                'model' => $model,
+                'prompt' => $prompt,
+                'n' => 1,
+                'output_format' => 'png',
             ])->throw();
             $usage = $response->json('usage', []);
             $this->logCall($actor, $project, $generation, 'image', $model, $location, 'succeeded', $started, $response, $usage, null, $metadata);
             return ['model' => $model, 'response' => $response->json(), 'usage' => $usage, 'request_id' => $response->json('id')];
+        } catch (RequestException $exception) {
+            $this->logCall($actor, $project, $generation, 'image', $model, $location, 'failed', $started, null, [], $exception, $metadata);
+            $providerMessage = $exception->response->json('error.message');
+            $message = $exception->response->status() === 404
+                ? 'The selected image model is not currently available for image generation. Ask an administrator to choose another default image model.'
+                : ($providerMessage ?: 'OpenRouter could not generate the image. Please try again.');
+            throw ValidationException::withMessages(['prompt' => $message]);
         } catch (\Throwable $exception) {
             $this->logCall($actor, $project, $generation, 'image', $model, $location, 'failed', $started, null, [], $exception, $metadata);
             throw $exception;
@@ -91,9 +101,9 @@ class OpenRouterService
         ]);
     }
 
-    private function client()
+    private function client(int $timeout = 90)
     {
-        return Http::acceptJson()->timeout(90)->withToken(config('services.openrouter.key'))->withHeaders(array_filter([
+        return Http::acceptJson()->timeout($timeout)->withToken(config('services.openrouter.key'))->withHeaders(array_filter([
             'HTTP-Referer' => config('services.openrouter.site_url'),
             'X-Title' => config('services.openrouter.app_name'),
         ]));

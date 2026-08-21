@@ -21,7 +21,7 @@ return [
         'repeaters' => [
             ['key' => 'products', 'label' => 'Comparison products', 'min' => 2, 'max' => 6, 'fields' => [
                 ['key' => 'asin', 'label' => 'ASIN', 'type' => 'asin', 'required' => true],
-                ['key' => 'image', 'label' => 'Product image', 'type' => 'image', 'width' => 150, 'height' => 300, 'required' => true],
+                ['key' => 'image', 'label' => 'Product image', 'type' => 'image', 'width' => 200, 'height' => 300, 'required' => true],
                 ['key' => 'title', 'label' => 'Title', 'type' => 'text', 'required' => true],
                 ['key' => 'highlighted', 'label' => 'Highlight column', 'type' => 'checkbox'],
             ]],

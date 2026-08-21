@@ -3,11 +3,13 @@
 namespace Tests\Feature;
 
 use App\Models\AiSetting;
+use App\Models\Asset;
 use App\Models\Project;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -66,6 +68,41 @@ class AdminAiTest extends TestCase
         $this->actingAs($user)->get(route('admin.ai.logs'))->assertForbidden();
         $this->actingAs($admin)->get(route('admin.ai.logs'))->assertOk()
             ->assertSee('vendor/text-model')->assertSee($user->email)->assertSee('Module Copy')->assertSee('$0.00123456');
+    }
+
+    public function test_image_generation_uses_the_dedicated_openrouter_image_api(): void
+    {
+        Storage::fake('public');
+        $admin = User::factory()->create(['role' => 'admin']);
+        $user = User::factory()->create();
+        $project = Project::create(['uuid' => (string) Str::uuid(), 'user_id' => $user->id, 'name' => 'Image project']);
+        AiSetting::create(['text_model' => 'vendor/text-model', 'image_model' => 'vendor/image-model', 'updated_by' => $admin->id]);
+        $png = base64_encode(base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='));
+
+        Http::fake(['openrouter.test/images' => Http::response([
+            'created' => 1748372400,
+            'data' => [['b64_json' => $png, 'media_type' => 'image/png']],
+            'usage' => ['prompt_tokens' => 12, 'completion_tokens' => 100, 'total_tokens' => 112, 'cost' => 0.04],
+        ], 200)]);
+
+        $this->actingAs($user)->postJson(route('projects.ai.image', $project), [
+            'prompt' => 'A lighthouse at dusk', 'alt_text' => 'A lighthouse at dusk', 'width' => 970, 'height' => 300,
+        ])->assertCreated()->assertJsonPath('data.source', 'ai');
+
+        $asset = Asset::where('project_id', $project->id)->firstOrFail();
+        Storage::disk('public')->assertExists($asset->path);
+        $this->assertSame('image/png', $asset->mime_type);
+        $this->assertDatabaseHas('ai_call_logs', [
+            'user_id' => $user->id, 'kind' => 'image', 'model' => 'vendor/image-model', 'location' => 'builder.image_generation',
+            'status' => 'succeeded', 'cost_usd' => 0.04,
+        ]);
+        Http::assertSent(fn ($request) => $request->url() === 'https://openrouter.test/images'
+            && $request['model'] === 'vendor/image-model'
+            && $request['prompt'] !== null
+            && $request['n'] === 1
+            && $request['output_format'] === 'png'
+            && ! isset($request['modalities'])
+            && ! isset($request['messages']));
     }
 
     private function models(): array

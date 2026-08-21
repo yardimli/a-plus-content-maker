@@ -189,6 +189,22 @@ class BuilderTest extends TestCase
         );
     }
 
+    public function test_public_template_detail_includes_rendered_modules_and_viewport_controls(): void
+    {
+        $this->seed();
+        $template = ContentTemplate::where('slug', 'letters-at-low-tide')->firstOrFail();
+
+        $this->get(route('templates.show', $template))
+            ->assertOk()
+            ->assertSee('Rendered template')
+            ->assertSee('Desktop')
+            ->assertSee('Mobile')
+            ->assertSee('template-preview-frame', false)
+            ->assertSee('template-preview-data', false)
+            ->assertSee('light_text_overlay', false)
+            ->assertSee('letters-at-low-tide', false);
+    }
+
     public function test_series_template_clones_distinct_visual_assets_and_multi_book_slots(): void
     {
         Storage::fake('public');
@@ -282,7 +298,7 @@ class BuilderTest extends TestCase
             if ($isSeries) {
                 foreach ([1, 2, 3] as $index) {
                     $bookPath = $root.'/book-'.$index.'.webp';
-                    $assertDimensions($bookPath, 150, 300);
+                    $assertDimensions($bookPath, 200, 300);
                     $assertWhiteCorners($bookPath);
                 }
             }

@@ -41,21 +41,22 @@ class AiController extends Controller
         $generation = AiGeneration::create(['user_id' => $request->user()->id, 'project_id' => $project->id, 'kind' => 'image', 'model' => AiSetting::imageModel() ?: 'not-configured', 'prompt' => $prompt, 'status' => 'pending']);
         try {
             $result = $service->generateImage($prompt, $request->user(), $project, $generation, 'builder.image_generation', ['requested_width' => $data['width'], 'requested_height' => $data['height']]);
-            $imageUrl = data_get($result, 'response.choices.0.message.images.0.image_url.url') ?? data_get($result, 'response.choices.0.message.images.0.image_url');
-            if (! is_string($imageUrl) || ! preg_match('/^data:(image\/(?:png|jpeg|webp));base64,(.+)$/s', $imageUrl, $matches)) {
+            $base64Image = data_get($result, 'response.data.0.b64_json');
+            if (! is_string($base64Image)) {
                 throw new \RuntimeException('The selected image model did not return a supported image.');
             }
-            $bytes = base64_decode($matches[2], true);
+            $bytes = base64_decode($base64Image, true);
             $dimensions = $bytes ? getimagesizefromstring($bytes) : false;
-            if (! $dimensions || strlen($bytes) > 15 * 1024 * 1024) {
+            $mimeType = is_array($dimensions) ? ($dimensions['mime'] ?? null) : null;
+            if (! $dimensions || ! in_array($mimeType, ['image/png', 'image/jpeg', 'image/webp'], true) || strlen($bytes) > 15 * 1024 * 1024) {
                 throw new \RuntimeException('The generated image could not be validated.');
             }
-            $extension = $matches[1] === 'image/jpeg' ? 'jpg' : substr($matches[1], 6);
+            $extension = $mimeType === 'image/jpeg' ? 'jpg' : substr($mimeType, 6);
             $path = 'projects/'.$project->uuid.'/ai-'.Str::uuid().'.'.$extension;
             Storage::disk('public')->put($path, $bytes);
             $asset = Asset::create([
                 'user_id' => $request->user()->id, 'project_id' => $project->id, 'source' => 'ai', 'disk' => 'public', 'path' => $path,
-                'original_name' => 'AI generated image.'.$extension, 'mime_type' => $matches[1], 'extension' => $extension, 'size_bytes' => strlen($bytes),
+                'original_name' => 'AI generated image.'.$extension, 'mime_type' => $mimeType, 'extension' => $extension, 'size_bytes' => strlen($bytes),
                 'width' => $dimensions[0], 'height' => $dimensions[1], 'alt_text' => $data['alt_text'], 'checksum' => hash('sha256', $bytes),
                 'metadata' => ['model' => $result['model'], 'prompt' => $data['prompt'], 'requested_width' => $data['width'], 'requested_height' => $data['height']],
             ]);

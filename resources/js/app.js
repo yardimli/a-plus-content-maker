@@ -1,4 +1,5 @@
 import './builder';
+import './template-preview';
 
 const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
 
