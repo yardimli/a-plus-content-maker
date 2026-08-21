@@ -51,6 +51,13 @@ document.querySelectorAll('.admin-module-picker input').forEach((input) => input
     const label = document.getElementById('module-count'); if (label) label.textContent = `${count} selected`;
 }));
 
+document.getElementById('ai-model-filter')?.addEventListener('input', (event) => {
+    const query = event.target.value.trim().toLowerCase();
+    document.querySelectorAll('#ai-model-table tbody tr').forEach((row) => {
+        row.hidden = query !== '' && !row.textContent.toLowerCase().includes(query);
+    });
+});
+
 function escapeHtml(value = '') {
     return String(value).replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' }[character]));
 }

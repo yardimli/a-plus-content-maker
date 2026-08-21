@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Admin\TemplateController as AdminTemplateController;
+use App\Http\Controllers\Admin\AiCallLogController;
+use App\Http\Controllers\Admin\AiSettingsController;
 use App\Http\Controllers\AiController;
 use App\Http\Controllers\AsinController;
 use App\Http\Controllers\AssetController;
@@ -31,6 +33,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('/projects/{project}/modules/{module}', [ProjectModuleController::class, 'destroy'])->name('projects.modules.destroy');
     Route::post('/projects/{project}/modules/reorder', [ProjectModuleController::class, 'reorder'])->name('projects.modules.reorder');
     Route::post('/projects/{project}/assets', [AssetController::class, 'store'])->name('projects.assets.store');
+    Route::patch('/assets/{asset}', [AssetController::class, 'update'])->name('assets.update');
     Route::delete('/assets/{asset}', [AssetController::class, 'destroy'])->name('assets.destroy');
     Route::post('/api/asin/lookup', [AsinController::class, 'lookup'])->middleware('throttle:20,1')->name('asin.lookup');
     Route::post('/projects/{project}/asin/import', [AsinController::class, 'import'])->middleware('throttle:20,1')->name('projects.asin.import');
@@ -43,6 +46,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     Route::prefix('admin')->name('admin.')->middleware('admin')->group(function () {
+        Route::get('/ai/settings', [AiSettingsController::class, 'edit'])->name('ai.settings');
+        Route::put('/ai/settings', [AiSettingsController::class, 'update'])->name('ai.settings.update');
+        Route::get('/ai/logs', [AiCallLogController::class, 'index'])->name('ai.logs');
         Route::resource('templates', AdminTemplateController::class)->except('show');
     });
 });

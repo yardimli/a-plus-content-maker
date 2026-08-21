@@ -2,13 +2,16 @@ const dataNode = document.getElementById('builder-data');
 
 if (dataNode) {
     const boot = JSON.parse(dataNode.textContent);
-    const state = { ...boot, modules: [...boot.modules].sort((a, b) => a.position - b.position), activeAsset: null, aiModule: null };
+    const state = { ...boot, modules: [...boot.modules].sort((a, b) => a.position - b.position), activeAsset: null, selectedAsset: null, crop: null, aiModule: null };
     const elements = {
         list: document.getElementById('module-list'), outline: document.getElementById('module-outline'), empty: document.getElementById('builder-empty'),
-        gallery: document.getElementById('module-gallery'), moduleDialog: document.getElementById('module-dialog'), search: document.getElementById('module-search'),
-        assetDialog: document.getElementById('asset-dialog'), assetForm: document.getElementById('asset-form'), assetFile: document.getElementById('asset-file'), assetPreview: document.getElementById('asset-preview'),
-        assetAlt: document.getElementById('asset-alt'), assetRequirement: document.getElementById('asset-requirement'), assetAiPrompt: document.getElementById('asset-ai-prompt'), assetAiGenerate: document.getElementById('asset-ai-generate'), save: document.getElementById('save-state'),
+        gallery: document.getElementById('module-gallery'), moduleDialog: document.getElementById('module-dialog'), search: document.getElementById('module-search'), sampleContent: document.getElementById('populate-module-samples'),
+        assetDialog: document.getElementById('asset-dialog'), assetFile: document.getElementById('asset-file'), assetLibrary: document.getElementById('asset-library'), assetSearch: document.getElementById('asset-search'),
+        assetAlt: document.getElementById('asset-alt'), assetRequirement: document.getElementById('asset-requirement'), assetDetailsDialog: document.getElementById('asset-details-dialog'), assetDetailsForm: document.getElementById('asset-details-form'), assetDetailPreview: document.getElementById('asset-detail-preview'), assetDetailName: document.getElementById('asset-detail-name'), assetDetailDimensions: document.getElementById('asset-detail-dimensions'), assetDetailsUse: document.getElementById('asset-details-use'), assetDetailsSave: document.getElementById('asset-details-save'),
+        assetAiDialog: document.getElementById('asset-ai-dialog'), assetAiForm: document.getElementById('asset-ai-form'), assetAiPrompt: document.getElementById('asset-ai-prompt'), assetAiAlt: document.getElementById('asset-ai-alt'), assetAiGenerate: document.getElementById('asset-ai-generate'),
+        cropDialog: document.getElementById('crop-dialog'), cropCanvas: document.getElementById('crop-canvas'), cropZoom: document.getElementById('crop-zoom'), cropTargetLabel: document.getElementById('crop-target-label'), cropApply: document.getElementById('crop-apply'), save: document.getElementById('save-state'),
         aiDialog: document.getElementById('ai-dialog'), aiForm: document.getElementById('ai-form'), aiPrompt: document.getElementById('ai-prompt'), aiResult: document.getElementById('ai-result'), preview: document.getElementById('preview-content'),
+        moduleLimitMessage: document.getElementById('module-limit-message'), addModuleButtons: document.querySelectorAll('[data-open-module-dialog]'),
     };
     const timers = new Map();
 
@@ -64,6 +67,12 @@ if (dataNode) {
     }
 
     function render() {
+        const moduleLimitReached = state.modules.length >= boot.moduleLimit;
+        elements.addModuleButtons.forEach((button) => {
+            button.disabled = moduleLimitReached;
+            button.setAttribute('aria-disabled', String(moduleLimitReached));
+        });
+        elements.moduleLimitMessage.hidden = !moduleLimitReached;
         elements.empty.hidden = state.modules.length > 0;
         elements.list.innerHTML = '';
         elements.outline.innerHTML = '';
@@ -94,8 +103,18 @@ if (dataNode) {
             editor.querySelector('.rich-content').addEventListener('input', (event) => onChange(event.currentTarget.innerHTML)); wrapper.append(editor);
         } else if (field.type === 'image') {
             const asset = assetById(value); const button = document.createElement('button'); button.type = 'button'; button.className = 'image-field';
+            const isBanner = field.width >= 600 && field.width / field.height >= 2;
+            wrapper.classList.add('image-module-field');
+            if (isBanner) wrapper.classList.add('image-module-field-banner');
+            button.style.setProperty('--image-target-width', `${field.width}px`);
+            button.style.setProperty('--image-target-height', `${field.height}px`);
+            button.style.setProperty('--image-aspect-ratio', `${field.width} / ${field.height}`);
             button.innerHTML = asset ? `<img src="${esc(asset.url)}" alt="${esc(asset.alt_text || '')}">` : `<span><span class="image-symbol">▧</span><strong>${field.width} × ${field.height}</strong><small>Click to add image</small></span>`;
-            button.addEventListener('click', () => openAsset(field, (id) => onChange(id))); wrapper.append(button);
+            button.addEventListener('click', () => openAsset(field, (id) => onChange(id)));
+            button.addEventListener('dragover', (event) => { event.preventDefault(); button.classList.add('dragging-over'); });
+            button.addEventListener('dragleave', () => button.classList.remove('dragging-over'));
+            button.addEventListener('drop', (event) => { event.preventDefault(); button.classList.remove('dragging-over'); const file = event.dataTransfer.files?.[0]; if (!file) return; state.activeAsset = { field, callback: (id) => onChange(id) }; openNewFile(file); });
+            wrapper.append(button);
         } else if (field.type === 'asin') {
             const control = document.createElement('div'); control.className = 'asin-control';
             const input = document.createElement('input'); input.type = 'text'; input.maxLength = 10; input.value = fieldValue(value); input.placeholder = 'Enter 10-character ASIN';
@@ -147,7 +166,20 @@ if (dataNode) {
     }
 
     async function addModule(type) {
-        try { const payload = await window.apiFetch(state.routes.moduleStore, { method: 'POST', body: JSON.stringify({ module_type: type }) }); state.modules.push(payload.data); elements.moduleDialog.close(); render(); window.showToast('Module added'); }
+        if (state.modules.length >= boot.moduleLimit) {
+            elements.moduleDialog.close();
+            window.showToast('Amazon limits A+ Content to 5 modules.');
+            return;
+        }
+
+        try {
+            const payload = await window.apiFetch(state.routes.moduleStore, { method: 'POST', body: JSON.stringify({ module_type: type, populate_samples: elements.sampleContent?.checked ?? true }) });
+            state.modules.push(payload.data);
+            if (payload.assets) state.assets = payload.assets;
+            const assetSummary = document.querySelector('.asset-summary strong');
+            if (assetSummary) assetSummary.textContent = `${state.assets.length} ${state.assets.length === 1 ? 'image' : 'images'}`;
+            elements.moduleDialog.close(); render(); window.showToast('Module added');
+        }
         catch (error) { window.showToast(error.message); }
     }
 
@@ -177,26 +209,157 @@ if (dataNode) {
         } catch (error) { elements.save.className = 'save-state error'; elements.save.innerHTML = `<span></span>${esc(error.message)}`; }
     }
 
-    function openAsset(field, callback) {
-        state.activeAsset = { field, callback }; elements.assetForm.reset(); elements.assetPreview.innerHTML = ''; elements.assetRequirement.textContent = `Recommended: ${field.width} × ${field.height}px. Alt text is required.`; elements.assetDialog.showModal();
+    function updateAssetSummary() {
+        const summary = document.querySelector('.asset-summary strong');
+        if (summary) summary.textContent = `${state.assets.length} ${state.assets.length === 1 ? 'image' : 'images'}`;
     }
 
-    elements.assetFile.addEventListener('change', () => { const file = elements.assetFile.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => elements.assetPreview.innerHTML = `<img src="${reader.result}" alt="Selected image preview">`; reader.readAsDataURL(file); });
-    elements.assetForm.addEventListener('submit', async (event) => {
-        event.preventDefault(); const file = elements.assetFile.files[0]; if (!file) return;
-        const body = new FormData(); body.append('image', file); body.append('alt_text', elements.assetAlt.value);
-        try { const payload = await window.apiFetch(state.routes.assets, { method: 'POST', body }); state.assets.push(payload.data); state.activeAsset.callback(payload.data.id); elements.assetDialog.close(); render(); window.showToast('Image uploaded'); }
-        catch (error) { window.showToast(error.message); }
-    });
+    function openAsset(field = null, callback = null) {
+        state.activeAsset = field ? { field, callback } : null;
+        elements.assetSearch.value = '';
+        elements.assetRequirement.textContent = field ? `Target: ${field.width} × ${field.height}px. Every selected image will be fitted exactly.` : 'Browse and update images already uploaded to this project.';
+        document.getElementById('asset-ai-open').hidden = !field;
+        renderAssetLibrary();
+        if (!elements.assetDialog.open) elements.assetDialog.showModal();
+    }
 
-    elements.assetAiGenerate.addEventListener('click', async () => {
-        if (!elements.assetAiPrompt.value.trim() || !elements.assetAlt.value.trim()) { window.showToast('Add image direction and alt text first.'); return; }
-        const field = state.activeAsset.field; elements.assetAiGenerate.disabled = true; elements.assetAiGenerate.textContent = 'Generating…';
+    function renderAssetLibrary(filter = '') {
+        const query = filter.trim().toLowerCase();
+        const assets = state.assets.filter((asset) => `${asset.original_name || ''} ${asset.alt_text || ''}`.toLowerCase().includes(query));
+        elements.assetLibrary.innerHTML = assets.length ? '' : '<div class="asset-library-empty"><strong>No images found</strong><span>Upload a JPG, PNG, or WebP image to get started.</span></div>';
+        assets.forEach((asset) => {
+            const button = document.createElement('button'); button.type = 'button'; button.className = 'asset-card';
+            button.innerHTML = `<span><img src="${esc(asset.url)}" alt="${esc(asset.alt_text || '')}"></span><strong>${esc(asset.original_name || `Image ${asset.id}`)}</strong><small>${asset.width} × ${asset.height}</small>`;
+            button.addEventListener('click', () => showAssetDetails(asset)); elements.assetLibrary.append(button);
+        });
+    }
+
+    function showAssetDetails(asset) {
+        state.selectedAsset = asset;
+        if (elements.assetDialog.open) elements.assetDialog.close();
+        elements.assetDetailPreview.innerHTML = `<img src="${esc(asset.preview_url || asset.url)}" alt="">`;
+        elements.assetDetailName.textContent = asset.original_name || `Image ${asset.id || ''}`;
+        elements.assetDetailDimensions.textContent = `${asset.width} × ${asset.height}px${asset.size_bytes ? ` · ${Math.max(1, Math.round(asset.size_bytes / 1024))} KB` : ''}`;
+        elements.assetAlt.value = asset.alt_text || '';
+        elements.assetDetailsUse.hidden = !state.activeAsset;
+        elements.assetDetailsSave.textContent = asset.pending ? 'Save to library' : 'Save details';
+        if (!elements.assetDetailsDialog.open) elements.assetDetailsDialog.showModal();
+    }
+
+    function openNewFile(file) {
+        if (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size > 10 * 1024 * 1024) { window.showToast('Choose a JPG, PNG, or WebP image up to 10 MB.'); return; }
+        const previewUrl = URL.createObjectURL(file); const image = new Image();
+        image.onload = () => showAssetDetails({ pending: true, file, preview_url: previewUrl, original_name: file.name, width: image.naturalWidth, height: image.naturalHeight, size_bytes: file.size, alt_text: '' });
+        image.onerror = () => { URL.revokeObjectURL(previewUrl); window.showToast('That file could not be read as an image.'); };
+        image.src = previewUrl;
+    }
+
+    async function uploadAsset(blob, name, altText) {
+        const body = new FormData(); body.append('image', blob, name); body.append('alt_text', altText);
+        const payload = await window.apiFetch(state.routes.assets, { method: 'POST', body });
+        state.assets.push(payload.data); updateAssetSummary(); return payload.data;
+    }
+
+    async function saveAssetDetails() {
+        const asset = state.selectedAsset; const altText = elements.assetAlt.value.trim();
+        if (!altText) { elements.assetAlt.reportValidity(); return null; }
+        if (asset.pending) {
+            const uploaded = await uploadAsset(asset.file, asset.original_name, altText); state.selectedAsset = uploaded; return uploaded;
+        }
+        if (altText !== asset.alt_text) {
+            const payload = await window.apiFetch(`${state.routes.assetBase}/${asset.id}`, { method: 'PATCH', body: JSON.stringify({ alt_text: altText }) });
+            Object.assign(asset, payload.data);
+        }
+        return asset;
+    }
+
+    async function useSelectedAsset() {
+        if (!elements.assetDetailsForm.reportValidity()) return;
+        let asset = state.selectedAsset; asset.alt_text = elements.assetAlt.value.trim();
+        const field = state.activeAsset.field;
+        if (Number(asset.width) === Number(field.width) && Number(asset.height) === Number(field.height)) {
+            asset = await saveAssetDetails(); if (asset) finishAsset(asset);
+            return;
+        }
+        openCrop(asset);
+    }
+
+    function finishAsset(asset) {
+        state.activeAsset.callback(asset.id);
+        [elements.cropDialog, elements.assetDetailsDialog, elements.assetDialog].forEach((dialog) => { if (dialog.open) dialog.close(); });
+        render(); window.showToast('Image fitted and added');
+    }
+
+    function loadCropImage(source) {
+        return new Promise((resolve, reject) => { const image = new Image(); image.onload = () => resolve(image); image.onerror = reject; image.src = source; });
+    }
+
+    async function openCrop(asset) {
+        const field = state.activeAsset.field;
         try {
-            const payload = await window.apiFetch(state.routes.aiImage, { method: 'POST', body: JSON.stringify({ prompt: elements.assetAiPrompt.value, alt_text: elements.assetAlt.value, width: field.width, height: field.height }) });
-            state.assets.push(payload.data); state.activeAsset.callback(payload.data.id); elements.assetDialog.close(); render(); window.showToast('AI image generated and added');
+            const image = await loadCropImage(asset.preview_url || asset.url);
+            state.crop = { asset, image, rotation: 0, zoom: 1, x: 0, y: 0 };
+            elements.cropCanvas.width = field.width; elements.cropCanvas.height = field.height;
+            elements.cropCanvas.style.aspectRatio = `${field.width} / ${field.height}`;
+            elements.cropTargetLabel.textContent = `${field.width} × ${field.height}px`;
+            elements.cropZoom.value = '1'; elements.assetDetailsDialog.close(); elements.cropDialog.showModal(); drawCrop();
+        } catch { window.showToast('The selected image could not be opened for cropping.'); }
+    }
+
+    function cropMetrics() {
+        const crop = state.crop; const canvas = elements.cropCanvas; const quarterTurn = Math.abs(crop.rotation % 180) === 90;
+        const rotatedWidth = quarterTurn ? crop.image.naturalHeight : crop.image.naturalWidth;
+        const rotatedHeight = quarterTurn ? crop.image.naturalWidth : crop.image.naturalHeight;
+        const scale = Math.max(canvas.width / rotatedWidth, canvas.height / rotatedHeight) * crop.zoom;
+        return { scale, renderedWidth: rotatedWidth * scale, renderedHeight: rotatedHeight * scale };
+    }
+
+    function clampCrop() {
+        const metrics = cropMetrics(); const canvas = elements.cropCanvas;
+        state.crop.x = Math.max((canvas.width - metrics.renderedWidth) / 2, Math.min((metrics.renderedWidth - canvas.width) / 2, state.crop.x));
+        state.crop.y = Math.max((canvas.height - metrics.renderedHeight) / 2, Math.min((metrics.renderedHeight - canvas.height) / 2, state.crop.y));
+    }
+
+    function drawCrop() {
+        if (!state.crop) return; clampCrop();
+        const crop = state.crop; const canvas = elements.cropCanvas; const context = canvas.getContext('2d'); const { scale } = cropMetrics();
+        context.clearRect(0, 0, canvas.width, canvas.height); context.save();
+        context.translate(canvas.width / 2 + crop.x, canvas.height / 2 + crop.y); context.rotate(crop.rotation * Math.PI / 180);
+        context.drawImage(crop.image, -crop.image.naturalWidth * scale / 2, -crop.image.naturalHeight * scale / 2, crop.image.naturalWidth * scale, crop.image.naturalHeight * scale); context.restore();
+    }
+
+    elements.assetFile.addEventListener('change', () => { const file = elements.assetFile.files?.[0]; elements.assetFile.value = ''; if (file) openNewFile(file); });
+    elements.assetSearch.addEventListener('input', () => renderAssetLibrary(elements.assetSearch.value));
+    document.getElementById('open-asset-manager')?.addEventListener('click', () => openAsset());
+    document.querySelectorAll('[data-close-dialog]').forEach((button) => button.addEventListener('click', () => document.getElementById(button.dataset.closeDialog)?.close()));
+    document.getElementById('asset-details-back').addEventListener('click', () => { elements.assetDetailsDialog.close(); openAsset(state.activeAsset?.field, state.activeAsset?.callback); });
+    elements.assetDetailsForm.addEventListener('submit', async (event) => { event.preventDefault(); try { const asset = await saveAssetDetails(); if (asset) { showAssetDetails(asset); renderAssetLibrary(); window.showToast('Image details saved'); } } catch (error) { window.showToast(error.message); } });
+    elements.assetDetailsUse.addEventListener('click', async () => { try { await useSelectedAsset(); } catch (error) { window.showToast(error.message); } });
+    document.getElementById('crop-back').addEventListener('click', () => { elements.cropDialog.close(); showAssetDetails(state.selectedAsset); });
+    elements.cropZoom.addEventListener('input', () => { state.crop.zoom = Number(elements.cropZoom.value); drawCrop(); });
+    document.getElementById('crop-rotate-left').addEventListener('click', () => { state.crop.rotation = (state.crop.rotation - 90) % 360; state.crop.x = 0; state.crop.y = 0; drawCrop(); });
+    document.getElementById('crop-rotate-right').addEventListener('click', () => { state.crop.rotation = (state.crop.rotation + 90) % 360; state.crop.x = 0; state.crop.y = 0; drawCrop(); });
+    let cropPointer = null;
+    elements.cropCanvas.addEventListener('pointerdown', (event) => { cropPointer = { id: event.pointerId, x: event.clientX, y: event.clientY }; elements.cropCanvas.setPointerCapture(event.pointerId); });
+    elements.cropCanvas.addEventListener('pointermove', (event) => { if (!cropPointer || cropPointer.id !== event.pointerId) return; const rect = elements.cropCanvas.getBoundingClientRect(); state.crop.x += (event.clientX - cropPointer.x) * elements.cropCanvas.width / rect.width; state.crop.y += (event.clientY - cropPointer.y) * elements.cropCanvas.height / rect.height; cropPointer.x = event.clientX; cropPointer.y = event.clientY; drawCrop(); });
+    elements.cropCanvas.addEventListener('pointerup', () => { cropPointer = null; });
+    elements.cropApply.addEventListener('click', () => {
+        elements.cropApply.disabled = true; elements.cropApply.textContent = 'Cropping…';
+        elements.cropCanvas.toBlob(async (blob) => {
+            try { if (!blob) throw new Error('The cropped image could not be created.'); const original = state.crop.asset.original_name || 'image'; const name = `${original.replace(/\.[^.]+$/, '')}-${elements.cropCanvas.width}x${elements.cropCanvas.height}.png`; const asset = await uploadAsset(blob, name, state.crop.asset.alt_text); finishAsset(asset); }
+            catch (error) { window.showToast(error.message); }
+            finally { elements.cropApply.disabled = false; elements.cropApply.textContent = 'Crop and use'; }
+        }, 'image/png');
+    });
+    document.getElementById('asset-ai-open').addEventListener('click', () => { elements.assetDialog.close(); elements.assetAiForm.reset(); elements.assetAiDialog.showModal(); });
+    document.getElementById('asset-ai-back').addEventListener('click', () => { elements.assetAiDialog.close(); openAsset(state.activeAsset.field, state.activeAsset.callback); });
+    elements.assetAiForm.addEventListener('submit', async (event) => {
+        event.preventDefault(); const field = state.activeAsset.field; elements.assetAiGenerate.disabled = true; elements.assetAiGenerate.textContent = 'Generating…';
+        try {
+            const payload = await window.apiFetch(state.routes.aiImage, { method: 'POST', body: JSON.stringify({ prompt: elements.assetAiPrompt.value, alt_text: elements.assetAiAlt.value, width: field.width, height: field.height }) });
+            state.assets.push(payload.data); updateAssetSummary(); elements.assetAiDialog.close(); finishAsset(payload.data);
         } catch (error) { window.showToast(error.message); }
-        finally { elements.assetAiGenerate.disabled = false; elements.assetAiGenerate.textContent = '✦ Generate with AI'; }
+        finally { elements.assetAiGenerate.disabled = false; elements.assetAiGenerate.textContent = 'Generate and use'; }
     });
 
     elements.aiForm.addEventListener('submit', async (event) => {
@@ -216,20 +379,65 @@ if (dataNode) {
     }
 
     function renderPreview() {
-        elements.preview.innerHTML = state.modules.length ? state.modules.map((module) => {
-            const definition = state.registry[module.module_type]; const values = [];
-            (definition.fields || []).forEach((field) => { const value = module.content[field.key]; if (value) values.push(previewField(field, value)); });
-            (definition.repeaters || []).forEach((repeater) => { const rows = module.content[repeater.key] || []; if (rows.length) values.push(`<div class="preview-grid">${rows.map((row) => `<div class="preview-item">${repeater.fields.map((field) => row[field.key] ? previewField(field, row[field.key]) : '').join('')}</div>`).join('')}</div>`); });
-            return `<section class="preview-module preview-${module.module_type}"><small>${esc(definition.name)}</small>${values.join('')}</section>`;
-        }).join('') : '<div class="builder-empty"><h2>Add modules to preview your page</h2></div>';
+        elements.preview.innerHTML = state.modules.length
+            ? `<main class="amazon-preview">${state.modules.map(renderPreviewModule).join('')}</main>`
+            : '<div class="builder-empty"><h2>Add modules to preview your page</h2></div>';
     }
 
-    function previewField(field, value) {
-        if (field.type === 'image') { const asset = assetById(value); return asset ? `<img src="${esc(asset.url)}" alt="${esc(asset.alt_text || '')}">` : ''; }
-        if (field.type === 'richtext') return `<div class="preview-rich">${value}</div>`;
-        if (field.type === 'checkbox') return '';
-        if (field.key.includes('headline') || field.key === 'title') return `<h2>${esc(value)}</h2>`;
-        return `<p>${esc(value)}</p>`;
+    function previewImage(id, className = '') {
+        const asset = assetById(id);
+        return asset ? `<img class="${className}" src="${esc(asset.url)}" alt="${esc(asset.alt_text || '')}">` : '<span class="amazon-missing-image"></span>';
+    }
+
+    function previewRich(value) { return value ? `<div class="amazon-rich">${value}</div>` : ''; }
+    function previewHeading(value, level = 2) { return value ? `<h${level}>${esc(value)}</h${level}>` : ''; }
+
+    function renderPreviewModule(module) {
+        const c = module.content || {};
+        const items = c.items || [];
+        const sections = c.sections || [];
+        const bullets = c.bullets || [];
+
+        switch (module.module_type) {
+            case 'company_logo':
+                return `<section class="amazon-module amazon-logo">${previewImage(c.image)}</section>`;
+            case 'comparison_chart': {
+                const products = c.products || [];
+                const metrics = c.metrics || [];
+                return `<section class="amazon-module amazon-comparison"><div class="amazon-compare-grid" style="--compare-count:${Math.max(products.length, 1)}"><span></span>${products.map((product) => `<article class="${product.highlighted ? 'highlighted' : ''}">${previewImage(product.image)}<strong>${esc(product.title || '')}</strong>${c.show_reviews ? '<span class="amazon-stars">★★★★★</span>' : ''}${c.show_prices ? '<small>Available on Amazon</small>' : ''}${c.show_add_to_cart ? '<button type="button">Shop now</button>' : ''}</article>`).join('')}${metrics.map((metric) => { const values = String(metric.values || '').split('|'); return `<strong class="metric-label">${esc(metric.label || '')}</strong>${products.map((_, index) => `<span class="metric-value">${esc(values[index] || '—')}</span>`).join('')}`; }).join('')}</div></section>`;
+            }
+            case 'four_image_text':
+                return `<section class="amazon-module amazon-feature-columns">${previewHeading(c.headline)}<div class="columns four">${items.map((item) => `<article>${previewImage(item.image)}${previewHeading(item.headline, 3)}${previewRich(item.body_html)}</article>`).join('')}</div></section>`;
+            case 'four_image_quadrant':
+                return `<section class="amazon-module amazon-quadrants">${items.map((item) => `<article>${previewImage(item.image)}<div>${previewHeading(item.headline, 3)}${previewRich(item.body_html)}</div></article>`).join('')}</section>`;
+            case 'dark_text_overlay':
+            case 'light_text_overlay':
+                return `<section class="amazon-module amazon-overlay ${module.module_type === 'dark_text_overlay' ? 'dark-copy' : 'light-copy'}">${previewImage(c.background)}<div class="overlay-copy">${previewHeading(c.headline)}${previewRich(c.body_html)}</div></section>`;
+            case 'image_header_text':
+                return `<section class="amazon-module amazon-header-image">${previewHeading(c.top_headline)}${previewImage(c.image)}<div>${previewHeading(c.headline)}${previewRich(c.body_html)}</div></section>`;
+            case 'multiple_image_a':
+                return `<section class="amazon-module amazon-multiple"><div class="multiple-main">${previewImage(items[0]?.image)}</div><div class="multiple-copy">${previewHeading(c.headline)}${previewRich(c.description_html)}<div class="multiple-thumbs">${items.map((item) => `<figure>${previewImage(item.image)}<figcaption>${esc(item.caption || '')}</figcaption></figure>`).join('')}</div></div></section>`;
+            case 'product_description_text':
+                return `<section class="amazon-module amazon-product-description">${previewRich(c.body_html)}</section>`;
+            case 'single_image_highlights':
+                return `<section class="amazon-module amazon-highlights">${previewImage(c.image)}<div class="highlight-copy">${sections.map((section) => `<article>${previewHeading(section.subheadline, 3)}${previewRich(section.body_html)}</article>`).join('')}</div><aside>${previewHeading(c.highlights_headline, 3)}<ul>${bullets.map((bullet) => `<li>${esc(bullet.text || '')}</li>`).join('')}</ul></aside></section>`;
+            case 'single_image_sidebar':
+                return `<section class="amazon-module amazon-sidebar"><figure>${previewImage(c.primary_image)}${c.image_caption ? `<figcaption>${esc(c.image_caption)}</figcaption>` : ''}</figure><div>${previewHeading(c.headline)}${previewHeading(c.subheadline, 3)}${previewRich(c.body_html)}${bullets.length ? `<ul>${bullets.map((bullet) => `<li>${esc(bullet.text || '')}</li>`).join('')}</ul>` : ''}</div><aside>${previewImage(c.sidebar_image)}${previewHeading(c.sidebar_headline, 3)}${previewRich(c.sidebar_body_html)}</aside></section>`;
+            case 'single_image_specs_detail':
+                return `<section class="amazon-module amazon-spec-detail">${previewHeading(c.headline)}<div class="spec-detail-grid">${previewImage(c.image)}${sections.map((section) => `<article>${previewHeading(section.headline, 3)}${previewHeading(section.subheadline, 4)}${previewRich(section.body_html)}</article>`).join('')}</div></section>`;
+            case 'single_left_image':
+                return `<section class="amazon-module amazon-single-image left">${previewImage(c.image)}<div>${previewHeading(c.headline)}${previewRich(c.body_html)}</div></section>`;
+            case 'single_right_image':
+                return `<section class="amazon-module amazon-single-image right"><div>${previewHeading(c.headline)}${previewRich(c.body_html)}</div>${previewImage(c.image)}</section>`;
+            case 'technical_specifications':
+                return `<section class="amazon-module amazon-tech-specs">${previewHeading(c.headline)}<div class="spec-rows columns-${esc(c.columns || '1')}">${(c.specifications || []).map((spec) => `<div><strong>${esc(spec.specification || '')}</strong><span>${esc(spec.definition || '')}</span></div>`).join('')}</div></section>`;
+            case 'standard_text':
+                return `<section class="amazon-module amazon-standard-text">${previewHeading(c.headline)}${previewRich(c.body_html)}</section>`;
+            case 'three_images_text':
+                return `<section class="amazon-module amazon-feature-columns">${previewHeading(c.headline)}<div class="columns three">${items.map((item) => `<article>${previewImage(item.image)}${previewHeading(item.headline, 3)}${previewRich(item.body_html)}</article>`).join('')}</div></section>`;
+            default:
+                return '';
+        }
     }
 
     function validateProject() {
@@ -248,7 +456,9 @@ if (dataNode) {
         if (field.type === 'image' && value) { const asset = assetById(value); if (asset && (asset.width !== field.width || asset.height !== field.height)) issues.push(`${context}: ${field.label} is ${asset.width}×${asset.height}; ${field.width}×${field.height} is recommended.`); }
     }
 
-    document.querySelectorAll('[data-open-module-dialog]').forEach((button) => button.addEventListener('click', () => elements.moduleDialog.showModal()));
+    elements.addModuleButtons.forEach((button) => button.addEventListener('click', () => {
+        if (state.modules.length < boot.moduleLimit) elements.moduleDialog.showModal();
+    }));
     elements.gallery.addEventListener('click', (event) => { const button = event.target.closest('[data-add-module]'); if (button) addModule(button.dataset.addModule); });
     elements.search.addEventListener('input', (event) => renderGallery(event.target.value));
     document.querySelectorAll('[data-builder-tab]').forEach((button) => button.addEventListener('click', () => { document.querySelectorAll('[data-builder-tab]').forEach((item) => item.classList.toggle('active', item === button)); document.querySelectorAll('[data-panel]').forEach((panel) => panel.hidden = panel.dataset.panel !== button.dataset.builderTab); if (button.dataset.builderTab === 'preview') renderPreview(); }));

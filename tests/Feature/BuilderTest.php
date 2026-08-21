@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\Asset;
 use App\Models\Project;
+use App\Models\ProjectModule;
 use App\Models\ContentTemplate;
 use App\Models\TemplateModule;
 use App\Models\User;
@@ -11,6 +13,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 class BuilderTest extends TestCase
@@ -44,6 +47,87 @@ class BuilderTest extends TestCase
         $this->actingAs($user)->patchJson(route('projects.modules.update', [$project, $module]), ['version' => 1, 'content' => $content])->assertOk()->assertJsonPath('data.version', 2);
         $this->assertStringNotContainsString('script', $module->fresh()->content['body_html']);
         $this->assertSame('standard_text', $created->json('data.module_type'));
+    }
+
+    public function test_module_can_be_added_with_editable_samples_or_empty(): void
+    {
+        Storage::fake('public');
+        $user = User::factory()->create();
+        $project = Project::create(['uuid' => (string) Str::uuid(), 'user_id' => $user->id, 'name' => 'Sample choice']);
+
+        $this->actingAs($user)->postJson(route('projects.modules.store', $project), [
+            'module_type' => 'single_left_image', 'populate_samples' => true,
+        ])->assertCreated();
+
+        $populated = $project->modules()->where('position', 1)->firstOrFail();
+        $this->assertSame('A love that rewrites everything', $populated->content['headline']);
+        $this->assertNotNull($populated->content['image']);
+        $this->assertDatabaseHas('assets', ['project_id' => $project->id, 'source' => 'sample']);
+
+        $this->actingAs($user)->postJson(route('projects.modules.store', $project), [
+            'module_type' => 'single_left_image', 'populate_samples' => false,
+        ])->assertCreated();
+
+        $empty = $project->modules()->where('position', 2)->firstOrFail();
+        $this->assertNull($empty->content['headline']);
+        $this->assertNull($empty->content['image']);
+    }
+
+    public function test_project_is_limited_to_five_modules_and_can_add_again_after_removal(): void
+    {
+        $user = User::factory()->create();
+        $project = Project::create(['uuid' => (string) Str::uuid(), 'user_id' => $user->id, 'name' => 'Five module page']);
+
+        foreach (range(1, Project::MAX_MODULES) as $position) {
+            ProjectModule::create([
+                'uuid' => (string) Str::uuid(),
+                'project_id' => $project->id,
+                'module_type' => 'standard_text',
+                'position' => $position,
+                'content' => app(ModuleRegistry::class)->defaults('standard_text'),
+                'settings' => [],
+            ]);
+        }
+
+        $this->actingAs($user)->get(route('projects.builder', $project))
+            ->assertOk()
+            ->assertSee('Amazon limits A+ Content to 5 modules.')
+            ->assertSee('"moduleLimit":5', false);
+
+        $this->actingAs($user)->postJson(route('projects.modules.store', $project), ['module_type' => 'standard_text'])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.modules.0', 'Amazon limits A+ Content to 5 modules.');
+        $this->assertSame(Project::MAX_MODULES, $project->modules()->count());
+
+        $module = $project->modules()->firstOrFail();
+        $this->actingAs($user)->deleteJson(route('projects.modules.destroy', [$project, $module]))->assertOk();
+        $this->actingAs($user)->postJson(route('projects.modules.store', $project), ['module_type' => 'standard_text'])->assertCreated();
+        $this->assertSame(Project::MAX_MODULES, $project->modules()->count());
+    }
+
+    public function test_owner_can_delete_a_project_from_studio_with_its_assets(): void
+    {
+        Storage::fake('public');
+        $owner = User::factory()->create();
+        $stranger = User::factory()->create();
+        $project = Project::create(['uuid' => (string) Str::uuid(), 'user_id' => $owner->id, 'name' => 'Delete me']);
+        $path = 'projects/'.$project->uuid.'/image.png';
+        Storage::disk('public')->put($path, 'image');
+        $asset = Asset::create([
+            'user_id' => $owner->id,
+            'project_id' => $project->id,
+            'disk' => 'public',
+            'path' => $path,
+            'mime_type' => 'image/png',
+        ]);
+
+        $this->actingAs($owner)->get(route('dashboard'))->assertOk()->assertSee('Delete me')->assertSee('Delete');
+        $this->actingAs($stranger)->delete(route('projects.destroy', $project))->assertForbidden();
+        $this->actingAs($owner)->delete(route('projects.destroy', $project))->assertRedirect(route('projects.index'));
+
+        $this->assertDatabaseMissing('projects', ['id' => $project->id]);
+        $this->assertDatabaseMissing('assets', ['id' => $asset->id]);
+        Storage::disk('public')->assertMissing($path);
     }
 
     public function test_another_user_cannot_open_or_change_a_project(): void
@@ -105,7 +189,7 @@ class BuilderTest extends TestCase
         );
     }
 
-    public function test_series_template_clones_visual_asset_and_multi_book_slots(): void
+    public function test_series_template_clones_distinct_visual_assets_and_multi_book_slots(): void
     {
         Storage::fake('public');
         $this->seed();
@@ -118,9 +202,91 @@ class BuilderTest extends TestCase
         $comparison = $project->modules->firstWhere('module_type', 'comparison_chart');
         $this->assertCount(3, $comparison->content['products']);
         $this->assertNotNull($comparison->content['products'][0]['image']);
-        $this->assertSame($comparison->content['products'][0]['image'], $comparison->content['products'][2]['image']);
-        $this->assertCount(1, $project->assets);
-        Storage::disk('public')->assertExists($project->assets->first()->path);
+        $this->assertCount(3, array_unique(array_column($comparison->content['products'], 'image')));
+        $this->assertCount(7, $project->assets);
+        foreach ($project->assets as $asset) {
+            Storage::disk('public')->assertExists($asset->path);
+        }
+    }
+
+    public function test_single_book_template_uses_a_distinct_image_for_each_block_slot(): void
+    {
+        $this->seed();
+        $template = ContentTemplate::where('slug', 'letters-at-low-tide')->with('modules')->firstOrFail();
+        $paths = [];
+        $content = $template->modules->pluck('content')->all();
+        array_walk_recursive($content, function ($value) use (&$paths): void {
+            if (is_string($value) && str_starts_with($value, '/images/templates/blocks/')) {
+                $paths[] = $value;
+            }
+        });
+
+        $this->assertCount(5, $paths);
+        $this->assertCount(5, array_unique($paths));
+        foreach ($paths as $path) {
+            $this->assertFileExists(public_path(ltrim($path, '/')));
+        }
+    }
+
+    public function test_all_gallery_templates_use_exact_fit_artwork_and_white_book_mockups(): void
+    {
+        $templates = [
+            'letters-at-low-tide' => false,
+            'the-cinnamon-bookshop' => false,
+            'hearts-of-hawthorne-bay' => true,
+            'orbit-of-ash' => false,
+            'the-memory-cartographer' => false,
+            'the-meridian-expanse' => true,
+            'a-crown-of-briars' => false,
+            'the-mapmakers-dragon' => false,
+            'chronicles-of-emberfall' => true,
+            'the-black-harbor' => false,
+            'zero-hour-witness' => false,
+            'the-rook-directive' => true,
+        ];
+
+        $assertDimensions = function (string $path, int $width, int $height): void {
+            $this->assertFileExists($path);
+            $dimensions = getimagesize($path);
+            $this->assertIsArray($dimensions, 'Unable to read image dimensions for '.$path);
+            $this->assertSame([$width, $height], array_slice($dimensions, 0, 2), $path.' does not match its module target.');
+        };
+
+        $assertWhiteCorners = function (string $path): void {
+            $image = imagecreatefromwebp($path);
+            $this->assertInstanceOf(\GdImage::class, $image);
+            $points = [[0, 0], [imagesx($image) - 1, 0], [0, imagesy($image) - 1], [imagesx($image) - 1, imagesy($image) - 1]];
+
+            foreach ($points as [$x, $y]) {
+                $rgb = imagecolorsforindex($image, imagecolorat($image, $x, $y));
+                $this->assertGreaterThanOrEqual(245, min($rgb['red'], $rgb['green'], $rgb['blue']), $path.' must use a white book-mockup background.');
+            }
+
+            imagedestroy($image);
+        };
+
+        foreach ($templates as $slug => $isSeries) {
+            $root = public_path('images/templates/blocks/'.$slug);
+            $sourceRoot = public_path('images/templates/generated-sources/'.$slug);
+            $assertDimensions($root.'/hero.webp', 970, 300);
+            $assertDimensions($root.'/cover.webp', 300, 300);
+            $assertWhiteCorners($root.'/cover.webp');
+
+            foreach ([1, 2, 3] as $index) {
+                $this->assertFileExists($sourceRoot.'/feature-'.$index.'.png');
+                $assertDimensions($root.'/feature-'.$index.'.webp', 300, 300);
+            }
+
+            $this->assertFileExists($sourceRoot.'/hero.png');
+
+            if ($isSeries) {
+                foreach ([1, 2, 3] as $index) {
+                    $bookPath = $root.'/book-'.$index.'.webp';
+                    $assertDimensions($bookPath, 150, 300);
+                    $assertWhiteCorners($bookPath);
+                }
+            }
+        }
     }
 
     public function test_asin_lookup_is_mapped_and_never_exposes_provider_headers(): void
@@ -149,5 +315,35 @@ class BuilderTest extends TestCase
             ->assertCreated()->assertJsonPath('data.product.title', 'Backyard Starship')->assertJsonPath('data.asset.source', 'asin');
 
         $this->assertDatabaseHas('assets', ['project_id' => $project->id, 'source' => 'asin', 'alt_text' => 'Backyard Starship cover']);
+    }
+
+    public function test_asset_details_can_be_updated_only_by_the_owner(): void
+    {
+        $owner = User::factory()->create();
+        $stranger = User::factory()->create();
+        $project = Project::create(['uuid' => (string) Str::uuid(), 'user_id' => $owner->id, 'name' => 'Asset library']);
+        $asset = Asset::create([
+            'user_id' => $owner->id, 'project_id' => $project->id, 'disk' => 'public', 'path' => 'projects/example/image.png',
+            'original_name' => 'image.png', 'mime_type' => 'image/png', 'width' => 300, 'height' => 150, 'alt_text' => 'Old description',
+        ]);
+
+        $this->actingAs($stranger)->patchJson(route('assets.update', $asset), ['alt_text' => 'Not allowed'])->assertForbidden();
+        $this->actingAs($owner)->patchJson(route('assets.update', $asset), ['alt_text' => 'A blue abstract book banner'])->assertOk()
+            ->assertJsonPath('data.alt_text', 'A blue abstract book banner');
+        $this->assertDatabaseHas('assets', ['id' => $asset->id, 'alt_text' => 'A blue abstract book banner']);
+    }
+
+    public function test_uploaded_asset_returns_dimensions_for_exact_fit_workflow(): void
+    {
+        Storage::fake('public');
+        $user = User::factory()->create();
+        $project = Project::create(['uuid' => (string) Str::uuid(), 'user_id' => $user->id, 'name' => 'Crop project']);
+
+        $this->actingAs($user)->post(route('projects.assets.store', $project), [
+            'image' => UploadedFile::fake()->image('cropped.png', 600, 180),
+            'alt_text' => 'A panoramic fantasy landscape',
+        ])->assertCreated()->assertJsonPath('data.width', 600)->assertJsonPath('data.height', 180);
+
+        $this->assertDatabaseHas('assets', ['project_id' => $project->id, 'width' => 600, 'height' => 180]);
     }
 }

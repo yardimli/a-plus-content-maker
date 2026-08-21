@@ -43,7 +43,7 @@ class ProjectController extends Controller
                 'product_snapshot' => ! empty($data['product_snapshot']) ? json_decode($data['product_snapshot'], true) : null,
             ]);
             $assetMap = [];
-            foreach ($template?->modules ?? [] as $module) {
+            foreach (collect($template?->modules)->take(Project::MAX_MODULES) as $module) {
                 ProjectModule::create(['uuid' => (string) Str::uuid(), 'project_id' => $project->id, 'module_type' => $module->module_type, 'position' => $module->position, 'content' => $this->cloneTemplateAssets($module->content, $project, $request->user()->id, $assetMap), 'settings' => $module->settings]);
             }
             return $project;
@@ -63,7 +63,13 @@ class ProjectController extends Controller
     public function destroy(Project $project)
     {
         $this->authorize('delete', $project);
-        $project->delete();
+
+        DB::transaction(function () use ($project): void {
+            $project->assets()->delete();
+            $project->delete();
+        });
+        Storage::disk('public')->deleteDirectory('projects/'.$project->uuid);
+
         return redirect()->route('projects.index')->with('success', 'Project deleted.');
     }
 

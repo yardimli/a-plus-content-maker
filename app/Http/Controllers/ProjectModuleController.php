@@ -6,23 +6,40 @@ use App\Models\Project;
 use App\Models\ProjectModule;
 use App\Services\ModuleRegistry;
 use App\Services\RichTextSanitizer;
+use App\Services\SampleModuleContentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class ProjectModuleController extends Controller
 {
-    public function store(Request $request, Project $project, ModuleRegistry $registry)
+    public function store(Request $request, Project $project, ModuleRegistry $registry, SampleModuleContentService $samples)
     {
         $this->authorize('update', $project);
-        $type = $request->validate(['module_type' => ['required', 'string']])['module_type'];
+        $validated = $request->validate(['module_type' => ['required', 'string'], 'populate_samples' => ['sometimes', 'boolean']]);
+        $type = $validated['module_type'];
         $registry->get($type);
-        $module = ProjectModule::create([
-            'uuid' => (string) Str::uuid(), 'project_id' => $project->id, 'module_type' => $type,
-            'position' => ($project->modules()->max('position') ?? 0) + 1, 'content' => $registry->defaults($type), 'settings' => [],
-        ]);
-        $project->update(['last_saved_at' => now()]);
-        return response()->json(['ok' => true, 'data' => $module], 201);
+        $populate = (bool) ($validated['populate_samples'] ?? true);
+        $module = DB::transaction(function () use ($project, $registry, $samples, $type, $populate, $request) {
+            $lockedProject = Project::query()->whereKey($project->id)->lockForUpdate()->firstOrFail();
+
+            if ($lockedProject->modules()->count() >= Project::MAX_MODULES) {
+                throw ValidationException::withMessages([
+                    'modules' => 'Amazon limits A+ Content to 5 modules.',
+                ]);
+            }
+
+            $content = $populate ? $samples->build($lockedProject, $type, $request->user()->id) : $registry->defaults($type);
+            $module = ProjectModule::create([
+                'uuid' => (string) Str::uuid(), 'project_id' => $lockedProject->id, 'module_type' => $type,
+                'position' => ($lockedProject->modules()->max('position') ?? 0) + 1, 'content' => $content, 'settings' => [],
+            ]);
+            $lockedProject->update(['last_saved_at' => now()]);
+
+            return $module;
+        });
+        return response()->json(['ok' => true, 'data' => $module, 'assets' => $project->assets()->get()], 201);
     }
 
     public function update(Request $request, Project $project, ProjectModule $module, ModuleRegistry $registry, RichTextSanitizer $sanitizer)

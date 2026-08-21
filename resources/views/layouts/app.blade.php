@@ -24,7 +24,9 @@
                 <a href="{{ route('templates.index') }}" class="{{ request()->routeIs('templates.*') ? 'active' : '' }}">Template gallery</a>
                 @if(auth()->user()->isAdmin())
                     <span class="nav-label">Administration</span>
-                    <a href="{{ route('admin.templates.index') }}" class="{{ request()->routeIs('admin.*') ? 'active' : '' }}">Manage templates</a>
+                    <a href="{{ route('admin.templates.index') }}" class="{{ request()->routeIs('admin.templates.*') ? 'active' : '' }}">Manage templates</a>
+                    <a href="{{ route('admin.ai.settings') }}" class="{{ request()->routeIs('admin.ai.settings*') ? 'active' : '' }}">AI settings</a>
+                    <a href="{{ route('admin.ai.logs') }}" class="{{ request()->routeIs('admin.ai.logs') ? 'active' : '' }}">AI call logs</a>
                 @endif
             </nav>
             <div class="sidebar-foot">

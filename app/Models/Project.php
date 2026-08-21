@@ -9,6 +9,8 @@ class Project extends Model
 {
     use HasFactory;
 
+    public const MAX_MODULES = 5;
+
     protected $fillable = ['uuid', 'user_id', 'source_template_id', 'name', 'status', 'marketplace', 'asin', 'product_snapshot', 'author_name', 'genre', 'audience', 'tone', 'brand_notes', 'last_saved_at'];
     protected $casts = ['product_snapshot' => 'array', 'last_saved_at' => 'datetime'];
 

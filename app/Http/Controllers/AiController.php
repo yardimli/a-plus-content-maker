@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AiGeneration;
+use App\Models\AiSetting;
 use App\Models\Asset;
 use App\Models\Project;
 use App\Services\OpenRouterService;
@@ -16,10 +17,15 @@ class AiController extends Controller
     {
         $this->authorize('update', $project);
         $data = $request->validate(['prompt' => ['required', 'string', 'max:3000'], 'module_type' => ['required', 'string', 'max:100']]);
-        $generation = AiGeneration::create(['user_id' => $request->user()->id, 'project_id' => $project->id, 'kind' => 'text', 'model' => config('services.openrouter.text_model') ?: 'not-configured', 'prompt' => $data['prompt'], 'status' => 'pending']);
+        $generation = AiGeneration::create(['user_id' => $request->user()->id, 'project_id' => $project->id, 'kind' => 'text', 'model' => AiSetting::textModel() ?: 'not-configured', 'prompt' => $data['prompt'], 'status' => 'pending']);
         try {
-            $result = $service->generateText($data['prompt'], ['book' => $project->product_snapshot, 'author' => $project->author_name, 'genre' => $project->genre, 'audience' => $project->audience, 'tone' => $project->tone, 'module' => $data['module_type']]);
-            $generation->update(['response_payload' => $result, 'status' => 'succeeded', 'completed_at' => now()]);
+            $call = $service->generateText(
+                $data['prompt'],
+                ['book' => $project->product_snapshot, 'author' => $project->author_name, 'genre' => $project->genre, 'audience' => $project->audience, 'tone' => $project->tone, 'module' => $data['module_type']],
+                $request->user(), $project, $generation, 'builder.module_copy', ['module_type' => $data['module_type']]
+            );
+            $result = $call['data'];
+            $generation->update(['model' => $call['model'], 'response_payload' => $result, 'status' => 'succeeded', 'input_tokens' => data_get($call, 'usage.prompt_tokens'), 'output_tokens' => data_get($call, 'usage.completion_tokens'), 'completed_at' => now()]);
             return response()->json(['ok' => true, 'data' => $result]);
         } catch (\Throwable $exception) {
             $generation->update(['status' => 'failed', 'error_message' => $exception->getMessage(), 'completed_at' => now()]);
@@ -32,9 +38,9 @@ class AiController extends Controller
         $this->authorize('update', $project);
         $data = $request->validate(['prompt' => ['required', 'string', 'max:3000'], 'alt_text' => ['required', 'string', 'max:250'], 'width' => ['required', 'integer', 'min:100', 'max:2000'], 'height' => ['required', 'integer', 'min:100', 'max:2000']]);
         $prompt = $data['prompt']."\nCreate a polished book-marketing image composed for {$data['width']}×{$data['height']} pixels. Do not add text unless explicitly requested.";
-        $generation = AiGeneration::create(['user_id' => $request->user()->id, 'project_id' => $project->id, 'kind' => 'image', 'model' => config('services.openrouter.image_model') ?: 'not-configured', 'prompt' => $prompt, 'status' => 'pending']);
+        $generation = AiGeneration::create(['user_id' => $request->user()->id, 'project_id' => $project->id, 'kind' => 'image', 'model' => AiSetting::imageModel() ?: 'not-configured', 'prompt' => $prompt, 'status' => 'pending']);
         try {
-            $result = $service->generateImage($prompt);
+            $result = $service->generateImage($prompt, $request->user(), $project, $generation, 'builder.image_generation', ['requested_width' => $data['width'], 'requested_height' => $data['height']]);
             $imageUrl = data_get($result, 'response.choices.0.message.images.0.image_url.url') ?? data_get($result, 'response.choices.0.message.images.0.image_url');
             if (! is_string($imageUrl) || ! preg_match('/^data:(image\/(?:png|jpeg|webp));base64,(.+)$/s', $imageUrl, $matches)) {
                 throw new \RuntimeException('The selected image model did not return a supported image.');
@@ -53,7 +59,7 @@ class AiController extends Controller
                 'width' => $dimensions[0], 'height' => $dimensions[1], 'alt_text' => $data['alt_text'], 'checksum' => hash('sha256', $bytes),
                 'metadata' => ['model' => $result['model'], 'prompt' => $data['prompt'], 'requested_width' => $data['width'], 'requested_height' => $data['height']],
             ]);
-            $generation->update(['response_payload' => ['asset_id' => $asset->id], 'status' => 'succeeded', 'completed_at' => now()]);
+            $generation->update(['model' => $result['model'], 'response_payload' => ['asset_id' => $asset->id], 'status' => 'succeeded', 'input_tokens' => data_get($result, 'usage.prompt_tokens'), 'output_tokens' => data_get($result, 'usage.completion_tokens'), 'completed_at' => now()]);
             return response()->json(['ok' => true, 'data' => $asset], 201);
         } catch (\Throwable $exception) {
             $generation->update(['status' => 'failed', 'error_message' => $exception->getMessage(), 'completed_at' => now()]);

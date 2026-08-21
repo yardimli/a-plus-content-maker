@@ -42,6 +42,7 @@ class DatabaseSeeder extends Seeder
         $registry = app(ModuleRegistry::class);
         foreach ($templates as $index => $data) {
             $image = '/images/templates/'.$data['image'];
+            $blockRoot = '/images/templates/blocks/'.$data['slug'];
             $isSeries = isset($data['books']);
             $template = ContentTemplate::updateOrCreate(
                 ['slug' => $data['slug']],
@@ -59,7 +60,7 @@ class DatabaseSeeder extends Seeder
                 $comparison['show_reviews'] = true;
                 $comparison['show_prices'] = true;
                 $comparison['show_add_to_cart'] = false;
-                $comparison['products'] = collect($data['books'])->map(fn ($title, $bookIndex) => ['asin' => null, 'image' => $image, 'title' => $title, 'highlighted' => $bookIndex === 0])->all();
+                $comparison['products'] = collect($data['books'])->map(fn ($title, $bookIndex) => ['asin' => null, 'image' => $blockRoot.'/book-'.($bookIndex + 1).'.webp', 'title' => $title, 'highlighted' => $bookIndex === 0])->all();
                 $comparison['metrics'] = [
                     ['label' => 'Reading order', 'values' => 'Book 1|Book 2|Book 3'],
                     ['label' => 'Series world', 'values' => $data['name'].'|'.$data['name'].'|'.$data['name']],
@@ -68,7 +69,7 @@ class DatabaseSeeder extends Seeder
                 TemplateModule::create(['template_id' => $template->id, 'module_type' => 'comparison_chart', 'position' => 1, 'content' => $comparison, 'settings' => ['multi_asin' => true, 'matches_preview' => 'book-lineup']]);
             } else {
                 $feature = $registry->defaults('single_left_image');
-                $feature['image'] = $image;
+                $feature['image'] = $blockRoot.'/cover.webp';
                 $feature['headline'] = $data['tagline'];
                 $feature['body_html'] = '<p>'.$data['summary'].' Replace the campaign artwork with your own cover-led composition.</p>';
                 TemplateModule::create(['template_id' => $template->id, 'module_type' => 'single_left_image', 'position' => 1, 'content' => $feature, 'settings' => ['matches_preview' => 'cover-and-copy']]);
@@ -76,7 +77,7 @@ class DatabaseSeeder extends Seeder
 
             $overlayType = $data['genre'] === 'Romance' ? 'light_text_overlay' : 'dark_text_overlay';
             $overlay = $registry->defaults($overlayType);
-            $overlay['background'] = $image;
+            $overlay['background'] = $blockRoot.'/hero.webp';
             $overlay['headline'] = $data['tagline'];
             $overlay['body_html'] = '<p>Use this panoramic section to establish the setting, stakes, and emotional atmosphere shown in the campaign preview.</p>';
             TemplateModule::create(['template_id' => $template->id, 'module_type' => $overlayType, 'position' => 2, 'content' => $overlay, 'settings' => ['matches_preview' => 'panoramic-story-panel']]);
@@ -85,7 +86,7 @@ class DatabaseSeeder extends Seeder
             $panels['headline'] = $isSeries ? 'Continue the journey across every book' : 'What readers will discover';
             $panelTitles = $isSeries ? $data['books'] : ['The atmosphere', 'The story promise', 'The reader experience'];
             $panels['items'] = collect($panelTitles)->take(3)->map(fn ($title, $panelIndex) => [
-                'image' => $image,
+                'image' => $blockRoot.'/feature-'.($panelIndex + 1).'.webp',
                 'headline' => $title,
                 'body_html' => $isSeries
                     ? '<p>Book '.($panelIndex + 1).' in '.$data['name'].'. Replace this panel with title-specific artwork and spoiler-free copy.</p>'

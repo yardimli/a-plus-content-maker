@@ -26,6 +26,15 @@ class AssetController extends Controller
         return response()->json(['ok' => true, 'data' => $asset], 201);
     }
 
+    public function update(Request $request, Asset $asset)
+    {
+        abort_unless($request->user()->isAdmin() || $request->user()->id === $asset->user_id, 403);
+        $data = $request->validate(['alt_text' => ['required', 'string', 'max:250']]);
+        $asset->update($data);
+
+        return response()->json(['ok' => true, 'data' => $asset->fresh()]);
+    }
+
     public function destroy(Request $request, Asset $asset)
     {
         abort_unless($request->user()->isAdmin() || $request->user()->id === $asset->user_id, 403);
