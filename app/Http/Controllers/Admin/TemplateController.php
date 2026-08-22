@@ -4,10 +4,14 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\ContentTemplate;
+use App\Models\Asset;
 use App\Models\TemplateModule;
 use App\Services\ModuleRegistry;
+use App\Services\RichTextSanitizer;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class TemplateController extends Controller
 {
@@ -18,27 +22,32 @@ class TemplateController extends Controller
 
     public function create(ModuleRegistry $registry)
     {
-        return view('admin.templates.form', ['template' => new ContentTemplate(), 'registry' => $registry->all()]);
+        return view('admin.templates.form', ['template' => new ContentTemplate(), 'registry' => $registry->all(), 'assets' => $this->templateAssets()]);
     }
 
-    public function store(Request $request, ModuleRegistry $registry)
+    public function store(Request $request, ModuleRegistry $registry, RichTextSanitizer $sanitizer)
     {
         $data = $this->validated($request);
-        $template = ContentTemplate::create([...$data, 'created_by' => $request->user()->id, 'slug' => $this->uniqueSlug($data['name']), 'published_at' => $data['status'] === 'published' ? now() : null]);
-        $this->syncModules($request, $template, $registry);
+        $template = DB::transaction(function () use ($request, $registry, $sanitizer, $data) {
+            $template = ContentTemplate::create([...$data, 'created_by' => $request->user()->id, 'slug' => $this->uniqueSlug($data['name']), 'published_at' => $data['status'] === 'published' ? now() : null]);
+            $this->syncModules($request, $template, $registry, $sanitizer);
+            return $template;
+        });
         return redirect()->route('admin.templates.edit', $template)->with('success', 'Template created.');
     }
 
     public function edit(ContentTemplate $template, ModuleRegistry $registry)
     {
-        return view('admin.templates.form', ['template' => $template->load('modules'), 'registry' => $registry->all()]);
+        return view('admin.templates.form', ['template' => $template->load('modules'), 'registry' => $registry->all(), 'assets' => $this->templateAssets()]);
     }
 
-    public function update(Request $request, ContentTemplate $template, ModuleRegistry $registry)
+    public function update(Request $request, ContentTemplate $template, ModuleRegistry $registry, RichTextSanitizer $sanitizer)
     {
         $data = $this->validated($request);
-        $template->update([...$data, 'published_at' => $data['status'] === 'published' ? ($template->published_at ?: now()) : null]);
-        $this->syncModules($request, $template, $registry);
+        DB::transaction(function () use ($request, $template, $registry, $sanitizer, $data) {
+            $template->update([...$data, 'published_at' => $data['status'] === 'published' ? ($template->published_at ?: now()) : null]);
+            $this->syncModules($request, $template, $registry, $sanitizer);
+        });
         return back()->with('success', 'Template updated.');
     }
 
@@ -56,14 +65,63 @@ class TemplateController extends Controller
         return $data;
     }
 
-    private function syncModules(Request $request, ContentTemplate $template, ModuleRegistry $registry): void
+    private function syncModules(Request $request, ContentTemplate $template, ModuleRegistry $registry, RichTextSanitizer $sanitizer): void
     {
-        $types = array_values(array_filter($request->input('modules', [])));
+        $types = array_values(array_unique(array_filter($request->input('modules', []))));
         foreach ($types as $type) { $registry->get($type); }
-        $template->modules()->delete();
+        $existing = $template->modules()->get()->keyBy('module_type');
+        $template->modules()->whereNotIn('module_type', $types)->delete();
         foreach ($types as $index => $type) {
-            TemplateModule::create(['template_id' => $template->id, 'module_type' => $type, 'position' => $index + 1, 'content' => $registry->defaults($type), 'settings' => []]);
+            $current = $existing->get($type);
+            $submitted = $request->input('module_content.'.$type);
+            $content = is_array($submitted)
+                ? $this->validatedModuleContent($type, $submitted, $registry, $sanitizer)
+                : ($current?->content ?? $registry->defaults($type));
+            TemplateModule::updateOrCreate(
+                ['template_id' => $template->id, 'module_type' => $type],
+                ['position' => $index + 1, 'content' => $content, 'settings' => $current?->settings ?? []]
+            );
         }
+    }
+
+    private function validatedModuleContent(string $type, array $submitted, ModuleRegistry $registry, RichTextSanitizer $sanitizer): array
+    {
+        $definition = $registry->get($type);
+        $rules = [];
+        foreach ($definition['fields'] ?? [] as $field) {
+            $rules[$field['key']] = $this->templateFieldRules($field);
+        }
+        foreach ($definition['repeaters'] ?? [] as $repeater) {
+            $rules[$repeater['key']] = ['array', 'min:'.($repeater['min'] ?? 0), 'max:'.$repeater['max']];
+            foreach ($repeater['fields'] as $field) {
+                $rules[$repeater['key'].'.*.'.$field['key']] = $this->templateFieldRules($field);
+            }
+        }
+
+        $validated = validator($submitted, $rules, [], $this->moduleAttributeNames($definition))->validate();
+        return $sanitizer->cleanPayload($validated);
+    }
+
+    private function templateFieldRules(array $field): array
+    {
+        return match ($field['type']) {
+            'checkbox' => ['nullable', 'boolean'],
+            'image' => ['nullable', 'string', 'max:2048', 'regex:#^/(?:images/templates|storage/template-assets)/[A-Za-z0-9_./-]+$#'],
+            'select' => ['nullable', Rule::in(array_keys($field['options'] ?? []))],
+            'asin' => ['nullable', 'string', 'max:20'],
+            default => ['nullable', 'string', 'max:10000'],
+        };
+    }
+
+    private function moduleAttributeNames(array $definition): array
+    {
+        $attributes = [];
+        foreach ($definition['fields'] ?? [] as $field) $attributes[$field['key']] = $field['label'];
+        foreach ($definition['repeaters'] ?? [] as $repeater) {
+            $attributes[$repeater['key']] = $repeater['label'];
+            foreach ($repeater['fields'] as $field) $attributes[$repeater['key'].'.*.'.$field['key']] = $repeater['label'].' '.$field['label'];
+        }
+        return $attributes;
     }
 
     private function uniqueSlug(string $name): string
@@ -71,5 +129,10 @@ class TemplateController extends Controller
         $base = Str::slug($name) ?: 'template'; $slug = $base; $suffix = 2;
         while (ContentTemplate::where('slug', $slug)->exists()) { $slug = $base.'-'.$suffix++; }
         return $slug;
+    }
+
+    private function templateAssets()
+    {
+        return Asset::query()->whereNull('project_id')->where('source', 'template')->latest()->get();
     }
 }

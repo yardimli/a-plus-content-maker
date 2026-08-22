@@ -1,5 +1,7 @@
 import './builder';
 import './template-preview';
+import './admin-template-assets';
+import './admin-template-editor';
 
 const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
 
@@ -47,10 +49,51 @@ if (lookupButton && window.projectCreate) {
     });
 }
 
-document.querySelectorAll('.admin-module-picker input').forEach((input) => input.addEventListener('change', () => {
-    const count = document.querySelectorAll('.admin-module-picker input:checked').length;
-    const label = document.getElementById('module-count'); if (label) label.textContent = `${count} selected`;
-}));
+const templateModuleToggles = document.querySelectorAll('[data-template-module-toggle]');
+const syncTemplateModuleEditors = () => {
+    const selected = [...templateModuleToggles].filter((input) => input.checked);
+    const countLabel = document.getElementById('module-count');
+    if (countLabel) countLabel.textContent = `${selected.length} selected`;
+    templateModuleToggles.forEach((input) => {
+        const editor = document.querySelector(`[data-template-module-content="${input.dataset.templateModuleToggle}"]`);
+        if (!editor) return;
+        editor.hidden = !input.checked;
+        editor.querySelectorAll('input, textarea, select').forEach((control) => { control.disabled = !input.checked; });
+    });
+    selected.forEach((input, index) => {
+        const number = document.querySelector(`[data-template-module-content="${input.dataset.templateModuleToggle}"] > header > div > span`);
+        if (number) number.textContent = String(index + 1).padStart(2, '0');
+    });
+};
+templateModuleToggles.forEach((input) => input.addEventListener('change', syncTemplateModuleEditors));
+
+document.querySelectorAll('[data-template-repeater]').forEach((repeater) => {
+    const rows = repeater.querySelector('[data-template-rows]');
+    const template = repeater.querySelector('[data-template-row-template]');
+    const add = repeater.querySelector('[data-template-add-row]');
+    let nextIndex = rows.children.length;
+    const refresh = () => {
+        const rowElements = [...rows.querySelectorAll(':scope > [data-template-row]')];
+        rowElements.forEach((row, index) => {
+            const number = row.querySelector('.admin-template-row-number'); if (number) number.textContent = index + 1;
+            const remove = row.querySelector('[data-template-remove-row]'); if (remove) remove.disabled = rowElements.length <= Number(repeater.dataset.min);
+        });
+        add.disabled = rowElements.length >= Number(repeater.dataset.max);
+    };
+    add.addEventListener('click', () => {
+        if (rows.children.length >= Number(repeater.dataset.max)) return;
+        rows.insertAdjacentHTML('beforeend', template.innerHTML.replaceAll('__INDEX__', String(nextIndex++)));
+        refresh();
+    });
+    rows.addEventListener('click', (event) => {
+        const remove = event.target.closest('[data-template-remove-row]');
+        if (!remove || rows.children.length <= Number(repeater.dataset.min)) return;
+        remove.closest('[data-template-row]').remove(); refresh();
+    });
+    refresh();
+});
+
+if (templateModuleToggles.length) syncTemplateModuleEditors();
 
 document.getElementById('ai-model-filter')?.addEventListener('input', (event) => {
     const query = event.target.value.trim().toLowerCase();

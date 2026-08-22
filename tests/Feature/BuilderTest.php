@@ -149,6 +149,93 @@ class BuilderTest extends TestCase
         $this->actingAs($admin)->get(route('admin.templates.index'))->assertOk();
     }
 
+    public function test_admin_can_fill_placeholder_content_for_new_template_modules(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $this->actingAs($admin)->get(route('admin.templates.create'))
+            ->assertOk()
+            ->assertSee('Choose and fill the structure')
+            ->assertSee('Placeholder content')
+            ->assertSee('module_content[standard_text][headline]', false)
+            ->assertSee('data-admin-rich-editor', false)
+            ->assertSee('id="admin-template-preview-open"', false)
+            ->assertSee('id="admin-template-preview-dialog"', false)
+            ->assertSee('Desktop')->assertSee('Mobile');
+
+        $this->actingAs($admin)->post(route('admin.templates.store'), [
+            'name' => 'Admin placeholder template',
+            'summary' => 'A filled starting point',
+            'status' => 'draft',
+            'modules' => ['standard_text', 'three_images_text'],
+            'module_content' => [
+                'standard_text' => [
+                    'headline' => 'A ready-made headline',
+                    'body_html' => '<p onclick="bad()"><strong>Safe placeholder copy</strong><script>alert(1)</script></p>',
+                ],
+                'three_images_text' => [
+                    'headline' => 'Three reasons to read',
+                    'items' => [
+                        ['image' => null, 'headline' => 'Reason one', 'body_html' => '<p>First reason.</p>'],
+                        ['image' => null, 'headline' => 'Reason two', 'body_html' => '<p>Second reason.</p>'],
+                        ['image' => null, 'headline' => 'Reason three', 'body_html' => '<p>Third reason.</p>'],
+                    ],
+                ],
+            ],
+        ])->assertRedirect();
+
+        $template = ContentTemplate::where('name', 'Admin placeholder template')->with('modules')->firstOrFail();
+        $text = $template->modules->firstWhere('module_type', 'standard_text');
+        $features = $template->modules->firstWhere('module_type', 'three_images_text');
+        $this->assertSame('A ready-made headline', $text->content['headline']);
+        $this->assertStringContainsString('<strong>Safe placeholder copy</strong>', $text->content['body_html']);
+        $this->assertStringNotContainsString('script', $text->content['body_html']);
+        $this->assertSame('Reason two', $features->content['items'][1]['headline']);
+        $this->actingAs($admin)->get(route('admin.templates.edit', $template))
+            ->assertOk()->assertSee('A ready-made headline')->assertSee('Reason three');
+
+        $previewJavascript = file_get_contents(resource_path('js/admin-template-editor.js'));
+        $this->assertStringContainsString('renderTemplateModules(modulesFromForm())', $previewJavascript);
+        $this->assertStringContainsString('new FormData(adminTemplateForm)', $previewJavascript);
+    }
+
+    public function test_admin_template_asset_library_uploads_and_clones_fitted_images(): void
+    {
+        Storage::fake('public');
+        $admin = User::factory()->create(['role' => 'admin']);
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->postJson(route('admin.template-assets.store'), [
+            'image' => UploadedFile::fake()->image('blocked.png', 300, 300), 'alt_text' => 'Blocked image',
+        ])->assertForbidden();
+
+        $uploaded = $this->actingAs($admin)->postJson(route('admin.template-assets.store'), [
+            'image' => UploadedFile::fake()->image('template-cover.png', 300, 300), 'alt_text' => 'A hardcover book on white',
+        ])->assertCreated();
+        $templatePath = $uploaded->json('data.template_path');
+        $this->assertStringStartsWith('/storage/template-assets/', $templatePath);
+        $this->assertDatabaseHas('assets', ['project_id' => null, 'source' => 'template', 'alt_text' => 'A hardcover book on white']);
+
+        $template = ContentTemplate::create(['created_by' => $admin->id, 'name' => 'Uploaded artwork', 'slug' => 'uploaded-artwork', 'status' => 'published']);
+        $content = app(ModuleRegistry::class)->defaults('single_left_image');
+        $content['image'] = $templatePath;
+        $content['headline'] = 'A complete starting point';
+        $content['body_html'] = '<p>Placeholder body.</p>';
+        TemplateModule::create(['template_id' => $template->id, 'module_type' => 'single_left_image', 'position' => 1, 'content' => $content, 'settings' => []]);
+
+        $this->actingAs($admin)->get(route('admin.templates.edit', $template))
+            ->assertOk()->assertSee('Template asset manager')->assertSee('data-template-choose-image', false)->assertSee($templatePath, false);
+
+        $this->actingAs($user)->post(route('projects.store'), [
+            'name' => 'Cloned artwork', 'marketplace' => 'amazon.com', 'template_id' => $template->id,
+        ])->assertRedirect();
+        $project = $user->projects()->with(['modules', 'assets'])->firstOrFail();
+        $clonedAsset = $project->assets->firstOrFail();
+        $this->assertSame('A hardcover book on white', $clonedAsset->alt_text);
+        $this->assertSame($clonedAsset->id, $project->modules->firstOrFail()->content['image']);
+        Storage::disk('public')->assertExists($clonedAsset->path);
+    }
+
     public function test_template_is_deep_copied_into_a_new_project(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);

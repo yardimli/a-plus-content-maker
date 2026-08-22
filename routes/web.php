@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\TemplateController as AdminTemplateController;
+use App\Http\Controllers\Admin\TemplateAssetController;
 use App\Http\Controllers\Admin\AiCallLogController;
 use App\Http\Controllers\Admin\AiSettingsController;
 use App\Http\Controllers\AiController;
@@ -49,6 +50,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/ai/settings', [AiSettingsController::class, 'edit'])->name('ai.settings');
         Route::put('/ai/settings', [AiSettingsController::class, 'update'])->name('ai.settings.update');
         Route::get('/ai/logs', [AiCallLogController::class, 'index'])->name('ai.logs');
+        Route::post('/template-assets', [TemplateAssetController::class, 'store'])->name('template-assets.store');
         Route::resource('templates', AdminTemplateController::class)->except('show');
     });
 });

@@ -83,25 +83,28 @@ class ProjectController extends Controller
 
             return $cloned;
         }
-        if (! is_string($value) || ! str_starts_with($value, '/images/templates/')) {
+        if (! is_string($value) || (! str_starts_with($value, '/images/templates/') && ! str_starts_with($value, '/storage/template-assets/'))) {
             return $value;
         }
         if (isset($assetMap[$value])) {
             return $assetMap[$value];
         }
-        $templateRoot = realpath(public_path('images/templates'));
-        $realSource = realpath(public_path(ltrim($value, '/')));
+        $isUploadedTemplateAsset = str_starts_with($value, '/storage/template-assets/');
+        $templateRoot = realpath($isUploadedTemplateAsset ? Storage::disk('public')->path('template-assets') : public_path('images/templates'));
+        $relativePath = $isUploadedTemplateAsset ? substr($value, strlen('/storage/')) : ltrim($value, '/');
+        $realSource = realpath($isUploadedTemplateAsset ? Storage::disk('public')->path($relativePath) : public_path($relativePath));
         abort_unless($templateRoot && $realSource && str_starts_with($realSource, $templateRoot.DIRECTORY_SEPARATOR), 422, 'Template image is unavailable.');
         $dimensions = getimagesize($realSource);
         abort_unless($dimensions !== false, 422, 'Template image is invalid.');
         $extension = strtolower(pathinfo($realSource, PATHINFO_EXTENSION));
         $path = 'projects/'.$project->uuid.'/template-'.Str::uuid().'.'.$extension;
         Storage::disk('public')->put($path, file_get_contents($realSource));
+        $sourceAsset = $isUploadedTemplateAsset ? Asset::query()->whereNull('project_id')->where('path', $relativePath)->first() : null;
         $asset = Asset::create([
             'user_id' => $userId, 'project_id' => $project->id, 'source' => 'template', 'disk' => 'public', 'path' => $path,
             'original_name' => basename($realSource), 'mime_type' => $dimensions['mime'], 'extension' => $extension,
             'size_bytes' => filesize($realSource), 'width' => $dimensions[0], 'height' => $dimensions[1],
-            'alt_text' => Str::headline(pathinfo($realSource, PATHINFO_FILENAME)).' publishing campaign artwork',
+            'alt_text' => $sourceAsset?->alt_text ?: Str::headline(pathinfo($realSource, PATHINFO_FILENAME)).' publishing campaign artwork',
             'checksum' => hash_file('sha256', $realSource), 'metadata' => ['template_path' => $value],
         ]);
 
