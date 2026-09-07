@@ -22,7 +22,12 @@ class TemplateController extends Controller
 
     public function create(ModuleRegistry $registry)
     {
-        return view('admin.templates.create', ['template' => new ContentTemplate()]);
+        return view('builder.show', [
+            'template' => new ContentTemplate(['status' => 'draft']),
+            'registry' => $registry->all(),
+            'assets' => $this->templateAssets(),
+            'editorMode' => 'template-create',
+        ]);
     }
 
     public function store(Request $request, ModuleRegistry $registry, RichTextSanitizer $sanitizer)
@@ -33,6 +38,9 @@ class TemplateController extends Controller
             $this->syncModules($request, $template, $registry, $sanitizer);
             return $template;
         });
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true, 'data' => $template, 'redirect' => route('admin.templates.edit', $template)], 201);
+        }
         return redirect()->route('admin.templates.edit', $template)->with('success', 'Template created.');
     }
 
@@ -142,12 +150,12 @@ class TemplateController extends Controller
         return $slug;
     }
 
-    private function templateAssets(ContentTemplate $template)
+    private function templateAssets(?ContentTemplate $template = null)
     {
         $assets = Asset::query()->whereNull('project_id')->where('source', 'template')->latest()->get()
             ->map(fn (Asset $asset) => $asset->toArray())->keyBy('template_path');
         $paths = [];
-        $content = $template->modules->pluck('content')->all();
+        $content = $template?->modules?->pluck('content')->all() ?? [];
         array_walk_recursive($content, function ($value) use (&$paths): void {
             if (is_string($value) && str_starts_with($value, '/images/templates/')) {
                 $paths[] = $value;

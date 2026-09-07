@@ -18,7 +18,7 @@ if (dataNode) {
 
     const esc = window.escapeHtml || ((value) => String(value));
     const assetById = (id) => state.assets.find((asset) => String(asset.id) === String(id) || String(asset.template_path || '') === String(id));
-    const assetReference = (asset) => state.mode === 'template' ? asset.template_path : asset.id;
+    const assetReference = (asset) => state.mode.startsWith('template') ? asset.template_path : asset.id;
     const fieldValue = (value) => value ?? '';
 
     function renderGallery(filter = '') {
@@ -70,9 +70,10 @@ if (dataNode) {
 
     function render() {
         const moduleLimitReached = state.modules.length >= boot.moduleLimit;
+        const modulesLocked = !state.routes.moduleStore;
         elements.addModuleButtons.forEach((button) => {
-            button.disabled = moduleLimitReached;
-            button.setAttribute('aria-disabled', String(moduleLimitReached));
+            button.disabled = moduleLimitReached || modulesLocked;
+            button.setAttribute('aria-disabled', String(moduleLimitReached || modulesLocked));
         });
         elements.moduleLimitMessage.hidden = !moduleLimitReached;
         elements.empty.hidden = state.modules.length > 0;
@@ -168,6 +169,7 @@ if (dataNode) {
     }
 
     async function addModule(type) {
+        if (!state.routes.moduleStore) { window.showToast('Save the gallery details before adding modules.'); return; }
         if (state.modules.length >= boot.moduleLimit) {
             elements.moduleDialog.close();
             window.showToast('Amazon limits A+ Content to 5 modules.');
@@ -427,7 +429,9 @@ if (dataNode) {
         submit.disabled = true; submit.textContent = 'Saving…';
         try {
             const fields = Object.fromEntries(new FormData(form)); fields.is_featured = form.elements.is_featured.checked;
-            const payload = await window.apiFetch(state.routes.entitySave, { method: 'PUT', body: JSON.stringify(fields) });
+            const creating = state.mode === 'template-create';
+            const payload = await window.apiFetch(state.routes.entitySave, { method: creating ? 'POST' : 'PUT', body: JSON.stringify(fields) });
+            if (creating && payload.redirect) { window.location.assign(payload.redirect); return; }
             state.project.name = payload.data.name; document.querySelector('.app-topbar h1').textContent = payload.data.name;
             window.showToast('Gallery details saved');
         } catch (error) { window.showToast(error.message); }

@@ -20,6 +20,7 @@ class TemplateAssetSearchTest extends TestCase
     {
         parent::setUp();
         Cache::flush();
+        Storage::fake('local');
         config(['services.serper.key' => 'serper-test-key', 'services.serper.base_url' => 'https://serper.test']);
     }
 
@@ -41,6 +42,14 @@ class TemplateAssetSearchTest extends TestCase
         $this->actingAs($admin)->getJson($url)->assertOk()
             ->assertJsonPath('data.query', 'red apple pexels')
             ->assertJsonCount(2, 'data.images');
+
+        $cacheFiles = Storage::disk('local')->files('serper');
+        $this->assertCount(1, $cacheFiles);
+        $this->assertStringEndsWith('.json', $cacheFiles[0]);
+        $cached = json_decode(Storage::disk('local')->get($cacheFiles[0]), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame('red apple pexels', $cached['query']);
+        $this->assertArrayNotHasKey('expires_at', $cached);
+        $this->assertCount(2, $cached['images']);
 
         Http::assertSentCount(1);
         Http::assertSent(fn ($request) => $request->url() === 'https://serper.test/images'

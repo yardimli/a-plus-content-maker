@@ -2,9 +2,9 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -17,9 +17,15 @@ class SerperImageSearchService
         $query = trim(preg_replace('/\s+/', ' ', $query) ?? '');
         $query = trim(preg_replace('/\s+(?:pexels|unsplash|pixabay)$/i', '', $query) ?? $query);
         $providerQuery = trim($query.' '.$source);
-        $cacheKey = 'serper:image-search:'.hash('sha256', Str::lower($providerQuery));
+        $cachePath = $this->cachePath($providerQuery);
+        $disk = Storage::disk('local');
+        $cached = $disk->exists($cachePath)
+            ? json_decode($disk->get($cachePath), true)
+            : null;
 
-        $images = Cache::remember($cacheKey, now()->addDays(7), function () use ($providerQuery): array {
+        if (is_array($cached) && ($cached['query'] ?? null) === $providerQuery && is_array($cached['images'] ?? null)) {
+            $images = $cached['images'];
+        } else {
             $key = config('services.serper.key');
             if (! $key) {
                 throw ValidationException::withMessages(['query' => 'SERPER_API_KEY is not configured.']);
@@ -37,7 +43,7 @@ class SerperImageSearchService
                 ->throw()
                 ->json();
 
-            return collect($payload['images'] ?? [])
+            $images = collect($payload['images'] ?? [])
                 ->filter(fn ($image) => is_array($image)
                     && $this->isAllowedImageUrl($image['imageUrl'] ?? null)
                     && filter_var($image['thumbnailUrl'] ?? null, FILTER_VALIDATE_URL))
@@ -55,7 +61,13 @@ class SerperImageSearchService
                 ])
                 ->values()
                 ->all();
-        });
+
+            $disk->put($cachePath, json_encode([
+                'query' => $providerQuery,
+                'cached_at' => now()->toIso8601String(),
+                'images' => $images,
+            ], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        }
 
         return [
             'query' => $providerQuery,
@@ -64,6 +76,13 @@ class SerperImageSearchService
                 return $image;
             })->all(),
         ];
+    }
+
+    private function cachePath(string $providerQuery): string
+    {
+        $label = Str::limit(Str::slug($providerQuery), 80, '') ?: 'search';
+
+        return 'serper/'.$label.'--'.hash('sha256', Str::lower($providerQuery)).'.json';
     }
 
     public function resultFromToken(string $token): array

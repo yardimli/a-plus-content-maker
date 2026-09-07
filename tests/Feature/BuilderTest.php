@@ -155,7 +155,9 @@ class BuilderTest extends TestCase
 
         $this->actingAs($admin)->get(route('admin.templates.create'))
             ->assertOk()
-            ->assertSee('Create and open builder')
+            ->assertSee('id="builder"', false)
+            ->assertSee('id="gallery-details-form"', false)
+            ->assertSee('Save gallery details to begin')
             ->assertDontSee('admin-template-layout', false);
 
         $this->actingAs($admin)->post(route('admin.templates.store'), [
@@ -192,7 +194,7 @@ class BuilderTest extends TestCase
             ->assertSee('id="module-list"', false)->assertSee('data-builder-tab="preview"', false);
 
         $builderJavascript = file_get_contents(resource_path('js/builder.js'));
-        $this->assertStringContainsString("state.mode === 'template'", $builderJavascript);
+        $this->assertStringContainsString("state.mode.startsWith('template')", $builderJavascript);
         $this->assertStringContainsString("gallery-details-form", $builderJavascript);
     }
 
@@ -273,6 +275,21 @@ class BuilderTest extends TestCase
         $this->assertCount(1, $template->fresh()->modules);
         $this->assertSame(['Epic', 'Adventure'], $template->fresh()->tags);
         $this->assertTrue($template->fresh()->is_featured);
+    }
+
+    public function test_new_template_gallery_details_create_a_draft_then_open_the_shared_builder(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $response = $this->actingAs($admin)->postJson(route('admin.templates.store'), [
+            'name' => 'New shared template', 'summary' => 'Created from the builder sidebar', 'description' => '',
+            'category' => 'Romance', 'tags' => 'Coastal, Emotional', 'status' => 'draft', 'is_featured' => false,
+        ])->assertCreated()->assertJsonPath('data.name', 'New shared template');
+
+        $template = ContentTemplate::where('name', 'New shared template')->firstOrFail();
+        $this->assertSame(route('admin.templates.edit', $template), $response->json('redirect'));
+        $this->actingAs($admin)->get($response->json('redirect'))->assertOk()
+            ->assertSee('id="builder"', false)->assertSee('Gallery details');
     }
 
     public function test_template_is_deep_copied_into_a_new_project(): void
