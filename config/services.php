@@ -46,6 +46,11 @@ return [
         'site_url' => env('OPENROUTER_SITE_URL'),
     ],
 
+    'serper' => [
+        'key' => env('SERPER_API_KEY'),
+        'base_url' => env('SERPER_BASE_URL', 'https://google.serper.dev'),
+    ],
+
     'admin' => [
         'name' => env('ADMIN_NAME', 'A+ Content Admin'),
         'email' => env('ADMIN_EMAIL', 'admin@example.com'),

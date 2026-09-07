@@ -22,7 +22,7 @@ class TemplateController extends Controller
 
     public function create(ModuleRegistry $registry)
     {
-        return view('admin.templates.form', ['template' => new ContentTemplate(), 'registry' => $registry->all(), 'assets' => $this->templateAssets()]);
+        return view('admin.templates.create', ['template' => new ContentTemplate()]);
     }
 
     public function store(Request $request, ModuleRegistry $registry, RichTextSanitizer $sanitizer)
@@ -38,7 +38,13 @@ class TemplateController extends Controller
 
     public function edit(ContentTemplate $template, ModuleRegistry $registry)
     {
-        return view('admin.templates.form', ['template' => $template->load('modules'), 'registry' => $registry->all(), 'assets' => $this->templateAssets()]);
+        $template->load('modules');
+        return view('builder.show', [
+            'template' => $template,
+            'registry' => $registry->all(),
+            'assets' => $this->templateAssets($template),
+            'editorMode' => 'template',
+        ]);
     }
 
     public function update(Request $request, ContentTemplate $template, ModuleRegistry $registry, RichTextSanitizer $sanitizer)
@@ -46,8 +52,13 @@ class TemplateController extends Controller
         $data = $this->validated($request);
         DB::transaction(function () use ($request, $template, $registry, $sanitizer, $data) {
             $template->update([...$data, 'published_at' => $data['status'] === 'published' ? ($template->published_at ?: now()) : null]);
-            $this->syncModules($request, $template, $registry, $sanitizer);
+            if ($request->has('modules')) {
+                $this->syncModules($request, $template, $registry, $sanitizer);
+            }
         });
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true, 'data' => $template->fresh()]);
+        }
         return back()->with('success', 'Template updated.');
     }
 
@@ -131,8 +142,37 @@ class TemplateController extends Controller
         return $slug;
     }
 
-    private function templateAssets()
+    private function templateAssets(ContentTemplate $template)
     {
-        return Asset::query()->whereNull('project_id')->where('source', 'template')->latest()->get();
+        $assets = Asset::query()->whereNull('project_id')->where('source', 'template')->latest()->get()
+            ->map(fn (Asset $asset) => $asset->toArray())->keyBy('template_path');
+        $paths = [];
+        $content = $template->modules->pluck('content')->all();
+        array_walk_recursive($content, function ($value) use (&$paths): void {
+            if (is_string($value) && str_starts_with($value, '/images/templates/')) {
+                $paths[] = $value;
+            }
+        });
+
+        foreach (array_unique($paths) as $path) {
+            if ($assets->has($path)) continue;
+            $file = public_path(ltrim($path, '/'));
+            $dimensions = is_file($file) ? getimagesize($file) : false;
+            $assets->put($path, [
+                'id' => $path,
+                'path' => $path,
+                'url' => $path,
+                'thumbnail_url' => $path,
+                'template_path' => $path,
+                'original_name' => basename($path),
+                'width' => $dimensions[0] ?? null,
+                'height' => $dimensions[1] ?? null,
+                'size_bytes' => is_file($file) ? filesize($file) : 0,
+                'alt_text' => Str::headline(pathinfo($path, PATHINFO_FILENAME)),
+                'read_only' => true,
+            ]);
+        }
+
+        return $assets->values();
     }
 }

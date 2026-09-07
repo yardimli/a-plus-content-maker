@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Asset;
+use App\Services\SerperImageImportService;
+use App\Services\SerperImageSearchService;
 use Illuminate\Http\Request;
 
 class TemplateAssetController extends Controller
@@ -33,6 +35,15 @@ class TemplateAssetController extends Controller
             'alt_text' => $data['alt_text'],
             'checksum' => hash_file('sha256', $file->getRealPath()),
         ]);
+
+        return response()->json(['ok' => true, 'data' => $asset], 201);
+    }
+
+    public function import(Request $request, SerperImageSearchService $search, SerperImageImportService $importer)
+    {
+        $data = $request->validate(['token' => ['required', 'string']]);
+        $result = $search->resultFromToken($data['token']);
+        $asset = $importer->import($result, $request->user());
 
         return response()->json(['ok' => true, 'data' => $asset], 201);
     }

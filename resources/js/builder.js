@@ -2,13 +2,14 @@ const dataNode = document.getElementById('builder-data');
 
 if (dataNode) {
     const boot = JSON.parse(dataNode.textContent);
-    const state = { ...boot, modules: [...boot.modules].sort((a, b) => a.position - b.position), activeAsset: null, selectedAsset: null, crop: null, aiModule: null };
+    const state = { ...boot, modules: [...boot.modules].sort((a, b) => a.position - b.position), activeAsset: null, selectedAsset: null, crop: null, aiModule: null, stockSearchResults: [], stockSearchPage: 1 };
     const elements = {
         list: document.getElementById('module-list'), outline: document.getElementById('module-outline'), empty: document.getElementById('builder-empty'),
         gallery: document.getElementById('module-gallery'), moduleDialog: document.getElementById('module-dialog'), search: document.getElementById('module-search'), sampleContent: document.getElementById('populate-module-samples'),
         assetDialog: document.getElementById('asset-dialog'), assetFile: document.getElementById('asset-file'), assetLibrary: document.getElementById('asset-library'), assetSearch: document.getElementById('asset-search'),
         assetAlt: document.getElementById('asset-alt'), assetRequirement: document.getElementById('asset-requirement'), assetDetailsDialog: document.getElementById('asset-details-dialog'), assetDetailsForm: document.getElementById('asset-details-form'), assetDetailPreview: document.getElementById('asset-detail-preview'), assetDetailName: document.getElementById('asset-detail-name'), assetDetailDimensions: document.getElementById('asset-detail-dimensions'), assetDetailsUse: document.getElementById('asset-details-use'), assetDetailsSave: document.getElementById('asset-details-save'),
         assetAiDialog: document.getElementById('asset-ai-dialog'), assetAiForm: document.getElementById('asset-ai-form'), assetAiPrompt: document.getElementById('asset-ai-prompt'), assetAiAlt: document.getElementById('asset-ai-alt'), assetAiGenerate: document.getElementById('asset-ai-generate'),
+        stockOpen: document.getElementById('asset-stock-search-open'), stockDialog: document.getElementById('asset-stock-search-dialog'), stockForm: document.getElementById('asset-stock-search-form'), stockQuery: document.getElementById('asset-stock-search-query'), stockProvider: document.getElementById('asset-stock-search-provider'), stockPageSize: document.getElementById('asset-stock-search-page-size'), stockSubmit: document.getElementById('asset-stock-search-submit'), stockSummary: document.getElementById('asset-stock-search-summary'), stockResults: document.getElementById('asset-stock-search-results'), stockPrevious: document.getElementById('asset-stock-search-previous'), stockNext: document.getElementById('asset-stock-search-next'), stockPage: document.getElementById('asset-stock-search-page'),
         cropDialog: document.getElementById('crop-dialog'), cropCanvas: document.getElementById('crop-canvas'), cropZoom: document.getElementById('crop-zoom'), cropTargetLabel: document.getElementById('crop-target-label'), cropApply: document.getElementById('crop-apply'), save: document.getElementById('save-state'),
         aiDialog: document.getElementById('ai-dialog'), aiForm: document.getElementById('ai-form'), aiPrompt: document.getElementById('ai-prompt'), aiResult: document.getElementById('ai-result'), preview: document.getElementById('preview-content'),
         moduleLimitMessage: document.getElementById('module-limit-message'), addModuleButtons: document.querySelectorAll('[data-open-module-dialog]'),
@@ -16,7 +17,8 @@ if (dataNode) {
     const timers = new Map();
 
     const esc = window.escapeHtml || ((value) => String(value));
-    const assetById = (id) => state.assets.find((asset) => Number(asset.id) === Number(id));
+    const assetById = (id) => state.assets.find((asset) => String(asset.id) === String(id) || String(asset.template_path || '') === String(id));
+    const assetReference = (asset) => state.mode === 'template' ? asset.template_path : asset.id;
     const fieldValue = (value) => value ?? '';
 
     function renderGallery(filter = '') {
@@ -79,7 +81,7 @@ if (dataNode) {
         state.modules.forEach((module, index) => {
             const definition = state.registry[module.module_type];
             const card = document.createElement('article'); card.className = 'module-editor'; card.dataset.uuid = module.uuid;
-            card.innerHTML = `<header class="module-editor-head"><span>${String(index + 1).padStart(2, '0')}</span><h3>${esc(definition.name)}</h3>${definition.ai_ready ? '<span class="ai-badge">AI ready</span>' : ''}<div class="module-editor-actions">${definition.ai_ready ? '<button type="button" data-ai title="Draft copy with AI">✦ Generate</button>' : ''}<button type="button" data-move="up" title="Move up">↑</button><button type="button" data-move="down" title="Move down">↓</button><button type="button" data-delete title="Remove">×</button></div></header><div class="module-fields"></div>`;
+            card.innerHTML = `<header class="module-editor-head"><span>${String(index + 1).padStart(2, '0')}</span><h3>${esc(definition.name)}</h3>${definition.ai_ready ? '<span class="ai-badge">AI ready</span>' : ''}<div class="module-editor-actions">${definition.ai_ready && state.routes.aiText ? '<button type="button" data-ai title="Draft copy with AI">✦ Generate</button>' : ''}<button type="button" data-move="up" title="Move up">↑</button><button type="button" data-move="down" title="Move down">↓</button><button type="button" data-delete title="Remove">×</button></div></header><div class="module-fields"></div>`;
             const fields = card.querySelector('.module-fields');
             (definition.fields || []).forEach((field) => fields.append(renderField(field, module.content[field.key], (value) => { module.content[field.key] = value; queueSave(module); })));
             (definition.repeaters || []).forEach((repeater) => fields.append(renderRepeater(module, repeater)));
@@ -118,7 +120,7 @@ if (dataNode) {
         } else if (field.type === 'asin') {
             const control = document.createElement('div'); control.className = 'asin-control';
             const input = document.createElement('input'); input.type = 'text'; input.maxLength = 10; input.value = fieldValue(value); input.placeholder = 'Enter 10-character ASIN';
-            const button = document.createElement('button'); button.type = 'button'; button.className = 'button button-secondary'; button.textContent = 'Replace cover';
+            const button = document.createElement('button'); button.type = 'button'; button.className = 'button button-secondary'; button.textContent = 'Replace cover'; button.hidden = !state.routes.asinImport;
             const hint = document.createElement('small'); hint.textContent = 'Looks up this book and replaces the title and cover in this slot.';
             input.addEventListener('input', (event) => onChange(event.target.value.toUpperCase()));
             button.addEventListener('click', async () => {
@@ -158,7 +160,7 @@ if (dataNode) {
 
     function bindCardActions() {
         document.querySelectorAll('.module-editor').forEach((card) => {
-            const module = state.modules.find((item) => item.uuid === card.dataset.uuid);
+            const module = state.modules.find((item) => String(item.uuid) === card.dataset.uuid);
             card.querySelector('[data-delete]')?.addEventListener('click', () => removeModule(module));
             card.querySelectorAll('[data-move]').forEach((button) => button.addEventListener('click', () => moveModule(module, button.dataset.move)));
             card.querySelector('[data-ai]')?.addEventListener('click', () => { state.aiModule = module; elements.aiResult.innerHTML = ''; elements.aiPrompt.value = ''; elements.aiDialog.showModal(); });
@@ -185,7 +187,7 @@ if (dataNode) {
 
     async function removeModule(module) {
         if (!confirm('Remove this module from the page?')) return;
-        try { await window.apiFetch(`${state.routes.moduleBase}/${module.uuid}`, { method: 'DELETE' }); state.modules = state.modules.filter((item) => item.uuid !== module.uuid); state.modules.forEach((item, index) => item.position = index + 1); render(); window.showToast('Module removed'); }
+        try { await window.apiFetch(`${state.routes.moduleBase}/${module.uuid}`, { method: 'DELETE' }); state.modules = state.modules.filter((item) => String(item.uuid) !== String(module.uuid)); state.modules.forEach((item, index) => item.position = index + 1); render(); window.showToast('Module removed'); }
         catch (error) { window.showToast(error.message); }
     }
 
@@ -204,8 +206,9 @@ if (dataNode) {
 
     async function saveModule(module) {
         try {
-            const payload = await window.apiFetch(`${state.routes.moduleBase}/${module.uuid}`, { method: 'PATCH', body: JSON.stringify({ version: module.version, content: module.content }) });
-            module.version = payload.data.version; elements.save.className = 'save-state'; elements.save.innerHTML = '<span></span>All changes saved'; renderPreview();
+            const body = { content: module.content }; if (state.mode === 'project') body.version = module.version;
+            const payload = await window.apiFetch(`${state.routes.moduleBase}/${module.uuid}`, { method: 'PATCH', body: JSON.stringify(body) });
+            if (payload.data.version !== undefined) module.version = payload.data.version; elements.save.className = 'save-state'; elements.save.innerHTML = '<span></span>All changes saved'; renderPreview();
         } catch (error) { elements.save.className = 'save-state error'; elements.save.innerHTML = `<span></span>${esc(error.message)}`; }
     }
 
@@ -218,7 +221,7 @@ if (dataNode) {
         state.activeAsset = field ? { field, callback } : null;
         elements.assetSearch.value = '';
         elements.assetRequirement.textContent = field ? `Target: ${field.width} × ${field.height}px. Every selected image will be fitted exactly.` : 'Browse and update images already uploaded to this project.';
-        document.getElementById('asset-ai-open').hidden = !field;
+        document.getElementById('asset-ai-open').hidden = !field || !state.routes.aiImage;
         renderAssetLibrary();
         if (!elements.assetDialog.open) elements.assetDialog.showModal();
     }
@@ -229,7 +232,7 @@ if (dataNode) {
         elements.assetLibrary.innerHTML = assets.length ? '' : '<div class="asset-library-empty"><strong>No images found</strong><span>Upload a JPG, PNG, or WebP image to get started.</span></div>';
         assets.forEach((asset) => {
             const button = document.createElement('button'); button.type = 'button'; button.className = 'asset-card';
-            button.innerHTML = `<span><img src="${esc(asset.url)}" alt="${esc(asset.alt_text || '')}"></span><strong>${esc(asset.original_name || `Image ${asset.id}`)}</strong><small>${asset.width} × ${asset.height}</small>`;
+            button.innerHTML = `<span><img src="${esc(asset.thumbnail_url || asset.url)}" alt="${esc(asset.alt_text || '')}"></span><strong>${esc(asset.original_name || `Image ${asset.id}`)}</strong><small>${asset.width} × ${asset.height}</small>`;
             button.addEventListener('click', () => showAssetDetails(asset)); elements.assetLibrary.append(button);
         });
     }
@@ -260,9 +263,50 @@ if (dataNode) {
         state.assets.push(payload.data); updateAssetSummary(); return payload.data;
     }
 
+    function renderStockSearchResults() {
+        const pageSize = Number(elements.stockPageSize.value);
+        const pageCount = Math.max(1, Math.ceil(state.stockSearchResults.length / pageSize));
+        state.stockSearchPage = Math.min(state.stockSearchPage, pageCount);
+        const first = (state.stockSearchPage - 1) * pageSize;
+        const images = state.stockSearchResults.slice(first, first + pageSize);
+        elements.stockResults.innerHTML = images.length ? '' : '<div class="asset-library-empty"><strong>No matching images found</strong><span>Try another search or provider.</span></div>';
+        images.forEach((result) => {
+            const button = document.createElement('button'); button.type = 'button'; button.className = 'stock-result-card';
+            button.innerHTML = `<span><img src="${esc(result.thumbnail_url)}" alt="${esc(result.title)}" loading="lazy"></span><strong>${esc(result.title)}</strong><small>${esc(result.source || result.domain)} · ${result.width || '?'} × ${result.height || '?'}</small>`;
+            button.addEventListener('click', async () => {
+                button.disabled = true; const label = button.querySelector('strong'); const originalLabel = label.textContent; label.textContent = 'Downloading…';
+                try {
+                    const payload = await window.apiFetch(state.routes.assetImport, { method: 'POST', body: JSON.stringify({ token: result.token }) });
+                    state.assets.push(payload.data); updateAssetSummary(); elements.stockDialog.close(); showAssetDetails(payload.data);
+                    window.showToast('Image downloaded to this project');
+                } catch (error) { label.textContent = originalLabel; button.disabled = false; window.showToast(error.message); }
+            });
+            elements.stockResults.append(button);
+        });
+        elements.stockPage.textContent = `Page ${state.stockSearchPage} of ${pageCount}`;
+        elements.stockPrevious.disabled = state.stockSearchPage <= 1;
+        elements.stockNext.disabled = state.stockSearchPage >= pageCount;
+    }
+
+    async function searchStockImages() {
+        const query = elements.stockQuery.value.trim();
+        if (!query) { elements.stockQuery.reportValidity(); return; }
+        elements.stockSubmit.disabled = true; elements.stockSubmit.textContent = 'Searching…'; elements.stockSummary.textContent = 'Searching Serper…';
+        try {
+            const params = new URLSearchParams({ query, source: elements.stockProvider.value });
+            const payload = await window.apiFetch(`${state.routes.assetSearch}?${params}`);
+            state.stockSearchResults = payload.data.images || []; state.stockSearchPage = 1;
+            elements.stockSummary.textContent = `${state.stockSearchResults.length} allowed results for “${payload.data.query}”`;
+            renderStockSearchResults();
+        } catch (error) {
+            state.stockSearchResults = []; state.stockSearchPage = 1; renderStockSearchResults(); elements.stockSummary.textContent = error.message; window.showToast(error.message);
+        } finally { elements.stockSubmit.disabled = false; elements.stockSubmit.textContent = 'Search'; }
+    }
+
     async function saveAssetDetails() {
         const asset = state.selectedAsset; const altText = elements.assetAlt.value.trim();
         if (!altText) { elements.assetAlt.reportValidity(); return null; }
+        if (asset.read_only) { asset.alt_text = altText; return asset; }
         if (asset.pending) {
             const uploaded = await uploadAsset(asset.file, asset.original_name, altText); state.selectedAsset = uploaded; return uploaded;
         }
@@ -285,7 +329,7 @@ if (dataNode) {
     }
 
     function finishAsset(asset) {
-        state.activeAsset.callback(asset.id);
+        state.activeAsset.callback(assetReference(asset));
         [elements.cropDialog, elements.assetDetailsDialog, elements.assetDialog].forEach((dialog) => { if (dialog.open) dialog.close(); });
         render(); window.showToast('Image fitted and added');
     }
@@ -330,6 +374,12 @@ if (dataNode) {
 
     elements.assetFile.addEventListener('change', () => { const file = elements.assetFile.files?.[0]; elements.assetFile.value = ''; if (file) openNewFile(file); });
     elements.assetSearch.addEventListener('input', () => renderAssetLibrary(elements.assetSearch.value));
+    elements.stockOpen.addEventListener('click', () => { elements.assetDialog.close(); elements.stockDialog.showModal(); setTimeout(() => elements.stockQuery.focus(), 0); });
+    elements.stockForm.addEventListener('submit', (event) => { event.preventDefault(); searchStockImages(); });
+    elements.stockPageSize.addEventListener('change', () => { state.stockSearchPage = 1; renderStockSearchResults(); });
+    elements.stockPrevious.addEventListener('click', () => { state.stockSearchPage--; renderStockSearchResults(); elements.stockResults.scrollTop = 0; });
+    elements.stockNext.addEventListener('click', () => { state.stockSearchPage++; renderStockSearchResults(); elements.stockResults.scrollTop = 0; });
+    document.getElementById('asset-stock-search-back').addEventListener('click', () => { elements.stockDialog.close(); openAsset(state.activeAsset?.field, state.activeAsset?.callback); });
     document.getElementById('open-asset-manager')?.addEventListener('click', () => openAsset());
     document.querySelectorAll('[data-close-dialog]').forEach((button) => button.addEventListener('click', () => document.getElementById(button.dataset.closeDialog)?.close()));
     document.getElementById('asset-details-back').addEventListener('click', () => { elements.assetDetailsDialog.close(); openAsset(state.activeAsset?.field, state.activeAsset?.callback); });
@@ -351,7 +401,7 @@ if (dataNode) {
             finally { elements.cropApply.disabled = false; elements.cropApply.textContent = 'Crop and use'; }
         }, 'image/png');
     });
-    document.getElementById('asset-ai-open').addEventListener('click', () => { elements.assetDialog.close(); elements.assetAiForm.reset(); elements.assetAiDialog.showModal(); });
+    document.getElementById('asset-ai-open').addEventListener('click', () => { if (!state.routes.aiImage) return; elements.assetDialog.close(); elements.assetAiForm.reset(); elements.assetAiDialog.showModal(); });
     document.getElementById('asset-ai-back').addEventListener('click', () => { elements.assetAiDialog.close(); openAsset(state.activeAsset.field, state.activeAsset.callback); });
     elements.assetAiForm.addEventListener('submit', async (event) => {
         event.preventDefault(); const field = state.activeAsset.field; elements.assetAiGenerate.disabled = true; elements.assetAiGenerate.textContent = 'Generating…';
@@ -370,6 +420,18 @@ if (dataNode) {
             document.getElementById('apply-ai').addEventListener('click', () => { applyAi(state.aiModule.content, result); queueSave(state.aiModule); elements.aiDialog.close(); render(); });
         } catch (error) { elements.aiResult.innerHTML = `<span class="field-error">${esc(error.message)}</span>`; }
         finally { submit.disabled = false; submit.textContent = 'Generate draft'; }
+    });
+
+    document.getElementById('gallery-details-form')?.addEventListener('submit', async (event) => {
+        event.preventDefault(); const form = event.currentTarget; const submit = form.querySelector('[type="submit"]');
+        submit.disabled = true; submit.textContent = 'Saving…';
+        try {
+            const fields = Object.fromEntries(new FormData(form)); fields.is_featured = form.elements.is_featured.checked;
+            const payload = await window.apiFetch(state.routes.entitySave, { method: 'PUT', body: JSON.stringify(fields) });
+            state.project.name = payload.data.name; document.querySelector('.app-topbar h1').textContent = payload.data.name;
+            window.showToast('Gallery details saved');
+        } catch (error) { window.showToast(error.message); }
+        finally { submit.disabled = false; submit.textContent = 'Save gallery details'; }
     });
 
     function applyAi(content, result) {

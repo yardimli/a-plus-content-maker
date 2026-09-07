@@ -4,11 +4,24 @@ namespace App\Http\Controllers;
 
 use App\Models\Asset;
 use App\Models\Project;
+use App\Services\SerperImageImportService;
+use App\Services\SerperImageSearchService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 
 class AssetController extends Controller
 {
+    public function search(Request $request, SerperImageSearchService $search)
+    {
+        $data = $request->validate([
+            'query' => ['required', 'string', 'max:150'],
+            'source' => ['required', Rule::in(SerperImageSearchService::SOURCES)],
+        ]);
+
+        return response()->json(['ok' => true, 'data' => $search->search($data['query'], $data['source'])]);
+    }
+
     public function store(Request $request, Project $project)
     {
         $this->authorize('update', $project);
@@ -33,6 +46,16 @@ class AssetController extends Controller
         $asset->update($data);
 
         return response()->json(['ok' => true, 'data' => $asset->fresh()]);
+    }
+
+    public function import(Request $request, Project $project, SerperImageSearchService $search, SerperImageImportService $importer)
+    {
+        $this->authorize('update', $project);
+        $data = $request->validate(['token' => ['required', 'string']]);
+        $result = $search->resultFromToken($data['token']);
+        $asset = $importer->import($result, $request->user(), $project);
+
+        return response()->json(['ok' => true, 'data' => $asset], 201);
     }
 
     public function destroy(Request $request, Asset $asset)

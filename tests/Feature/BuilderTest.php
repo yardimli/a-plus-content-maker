@@ -155,13 +155,8 @@ class BuilderTest extends TestCase
 
         $this->actingAs($admin)->get(route('admin.templates.create'))
             ->assertOk()
-            ->assertSee('Choose and fill the structure')
-            ->assertSee('Placeholder content')
-            ->assertSee('module_content[standard_text][headline]', false)
-            ->assertSee('data-admin-rich-editor', false)
-            ->assertSee('id="admin-template-preview-open"', false)
-            ->assertSee('id="admin-template-preview-dialog"', false)
-            ->assertSee('Desktop')->assertSee('Mobile');
+            ->assertSee('Create and open builder')
+            ->assertDontSee('admin-template-layout', false);
 
         $this->actingAs($admin)->post(route('admin.templates.store'), [
             'name' => 'Admin placeholder template',
@@ -192,11 +187,13 @@ class BuilderTest extends TestCase
         $this->assertStringNotContainsString('script', $text->content['body_html']);
         $this->assertSame('Reason two', $features->content['items'][1]['headline']);
         $this->actingAs($admin)->get(route('admin.templates.edit', $template))
-            ->assertOk()->assertSee('A ready-made headline')->assertSee('Reason three');
+            ->assertOk()->assertSee('A ready-made headline')->assertSee('Reason three')
+            ->assertSee('id="builder"', false)->assertSee('id="gallery-details-form"', false)
+            ->assertSee('id="module-list"', false)->assertSee('data-builder-tab="preview"', false);
 
-        $previewJavascript = file_get_contents(resource_path('js/admin-template-editor.js'));
-        $this->assertStringContainsString('renderTemplateModules(modulesFromForm())', $previewJavascript);
-        $this->assertStringContainsString('new FormData(adminTemplateForm)', $previewJavascript);
+        $builderJavascript = file_get_contents(resource_path('js/builder.js'));
+        $this->assertStringContainsString("state.mode === 'template'", $builderJavascript);
+        $this->assertStringContainsString("gallery-details-form", $builderJavascript);
     }
 
     public function test_admin_template_asset_library_uploads_and_clones_fitted_images(): void
@@ -224,7 +221,8 @@ class BuilderTest extends TestCase
         TemplateModule::create(['template_id' => $template->id, 'module_type' => 'single_left_image', 'position' => 1, 'content' => $content, 'settings' => []]);
 
         $this->actingAs($admin)->get(route('admin.templates.edit', $template))
-            ->assertOk()->assertSee('Template asset manager')->assertSee('data-template-choose-image', false)->assertSee($templatePath, false);
+            ->assertOk()->assertSee('Asset manager')->assertSee('id="asset-dialog"', false)
+            ->assertSee(str_replace('/', '\\/', $templatePath), false);
 
         $this->actingAs($user)->post(route('projects.store'), [
             'name' => 'Cloned artwork', 'marketplace' => 'amazon.com', 'template_id' => $template->id,
@@ -234,6 +232,47 @@ class BuilderTest extends TestCase
         $this->assertSame('A hardcover book on white', $clonedAsset->alt_text);
         $this->assertSame($clonedAsset->id, $project->modules->firstOrFail()->content['image']);
         Storage::disk('public')->assertExists($clonedAsset->path);
+    }
+
+    public function test_admin_shared_builder_can_add_edit_reorder_and_remove_template_modules(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $user = User::factory()->create();
+        $template = ContentTemplate::create(['created_by' => $admin->id, 'name' => 'Shared builder', 'slug' => 'shared-builder', 'status' => 'draft']);
+
+        $this->actingAs($user)->postJson(route('admin.templates.modules.store', $template), ['module_type' => 'standard_text'])->assertForbidden();
+        $first = $this->actingAs($admin)->postJson(route('admin.templates.modules.store', $template), ['module_type' => 'standard_text'])
+            ->assertCreated()->assertJsonPath('data.module_type', 'standard_text');
+        $second = $this->postJson(route('admin.templates.modules.store', $template), ['module_type' => 'single_left_image'])
+            ->assertCreated();
+
+        $text = TemplateModule::findOrFail($first->json('data.uuid'));
+        $this->patchJson(route('admin.templates.modules.update', [$template, $text]), [
+            'content' => ['headline' => 'Editable everywhere', 'body_html' => '<p onclick="bad()"><strong>Shared editor</strong><script>bad()</script></p>'],
+        ])->assertOk()->assertJsonPath('data.content.headline', 'Editable everywhere');
+        $this->assertStringNotContainsString('script', $text->fresh()->content['body_html']);
+
+        $this->postJson(route('admin.templates.modules.reorder', $template), ['modules' => [$second->json('data.uuid'), $first->json('data.uuid')]])->assertOk();
+        $this->assertSame('single_left_image', $template->modules()->first()->module_type);
+
+        $this->deleteJson(route('admin.templates.modules.destroy', [$template, $text]))->assertOk();
+        $this->assertDatabaseMissing('template_modules', ['id' => $text->id]);
+    }
+
+    public function test_gallery_details_save_does_not_replace_template_modules(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $template = ContentTemplate::create(['created_by' => $admin->id, 'name' => 'Before', 'slug' => 'before', 'status' => 'draft']);
+        TemplateModule::create(['template_id' => $template->id, 'module_type' => 'standard_text', 'position' => 1, 'content' => app(ModuleRegistry::class)->defaults('standard_text'), 'settings' => []]);
+
+        $this->actingAs($admin)->putJson(route('admin.templates.update', $template), [
+            'name' => 'After', 'summary' => 'Sidebar metadata', 'description' => 'Edited beside the modules.', 'category' => 'Fantasy',
+            'tags' => 'Epic, Adventure', 'status' => 'published', 'is_featured' => true,
+        ])->assertOk()->assertJsonPath('data.name', 'After');
+
+        $this->assertCount(1, $template->fresh()->modules);
+        $this->assertSame(['Epic', 'Adventure'], $template->fresh()->tags);
+        $this->assertTrue($template->fresh()->is_featured);
     }
 
     public function test_template_is_deep_copied_into_a_new_project(): void

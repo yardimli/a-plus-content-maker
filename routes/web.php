@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\TemplateController as AdminTemplateController;
+use App\Http\Controllers\Admin\TemplateModuleController;
 use App\Http\Controllers\Admin\TemplateAssetController;
 use App\Http\Controllers\Admin\AiCallLogController;
 use App\Http\Controllers\Admin\AiSettingsController;
@@ -34,6 +35,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('/projects/{project}/modules/{module}', [ProjectModuleController::class, 'destroy'])->name('projects.modules.destroy');
     Route::post('/projects/{project}/modules/reorder', [ProjectModuleController::class, 'reorder'])->name('projects.modules.reorder');
     Route::post('/projects/{project}/assets', [AssetController::class, 'store'])->name('projects.assets.store');
+    Route::get('/api/assets/search', [AssetController::class, 'search'])->middleware('throttle:30,1')->name('assets.search');
+    Route::post('/projects/{project}/assets/import', [AssetController::class, 'import'])->middleware('throttle:20,1')->name('projects.assets.import');
     Route::patch('/assets/{asset}', [AssetController::class, 'update'])->name('assets.update');
     Route::delete('/assets/{asset}', [AssetController::class, 'destroy'])->name('assets.destroy');
     Route::post('/api/asin/lookup', [AsinController::class, 'lookup'])->middleware('throttle:20,1')->name('asin.lookup');
@@ -51,6 +54,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::put('/ai/settings', [AiSettingsController::class, 'update'])->name('ai.settings.update');
         Route::get('/ai/logs', [AiCallLogController::class, 'index'])->name('ai.logs');
         Route::post('/template-assets', [TemplateAssetController::class, 'store'])->name('template-assets.store');
+        Route::post('/template-assets/import', [TemplateAssetController::class, 'import'])->middleware('throttle:20,1')->name('template-assets.import');
+        Route::post('/templates/{template}/modules', [TemplateModuleController::class, 'store'])->name('templates.modules.store');
+        Route::patch('/templates/{template}/modules/{module}', [TemplateModuleController::class, 'update'])->name('templates.modules.update');
+        Route::delete('/templates/{template}/modules/{module}', [TemplateModuleController::class, 'destroy'])->name('templates.modules.destroy');
+        Route::post('/templates/{template}/modules/reorder', [TemplateModuleController::class, 'reorder'])->name('templates.modules.reorder');
         Route::resource('templates', AdminTemplateController::class)->except('show');
     });
 });
