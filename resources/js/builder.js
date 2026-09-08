@@ -15,6 +15,11 @@ if (dataNode) {
         moduleLimitMessage: document.getElementById('module-limit-message'), addModuleButtons: document.querySelectorAll('[data-open-module-dialog]'),
     };
     const timers = new Map();
+    const toolbar = document.querySelector('.builder-toolbar');
+    const toolbarObserver = new ResizeObserver(() => {
+        document.getElementById('builder').style.setProperty('--builder-toolbar-height', `${toolbar.getBoundingClientRect().height}px`);
+    });
+    toolbarObserver.observe(toolbar);
 
     const esc = window.escapeHtml || ((value) => String(value));
     const assetById = (id) => state.assets.find((asset) => String(asset.id) === String(id) || String(asset.template_path || '') === String(id));

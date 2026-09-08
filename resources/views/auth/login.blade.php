@@ -2,7 +2,6 @@
 @section('title', 'Sign in')
 @section('content')
 <p class="eyebrow">Welcome back</p><h1>Return to your studio</h1><p class="auth-intro">Your books, modules, and export-ready assets are waiting.</p>
-@if(session('status'))<div class="flash flash-success">{{ session('status') }}</div>@endif
 <form method="POST" action="{{ route('login') }}" class="form-stack">@csrf
     <label>Email address<input type="email" name="email" value="{{ old('email') }}" required autofocus autocomplete="username">@error('email')<span class="field-error">{{ $message }}</span>@enderror</label>
     <label>Password<input type="password" name="password" required autocomplete="current-password">@error('password')<span class="field-error">{{ $message }}</span>@enderror</label>

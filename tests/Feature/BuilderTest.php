@@ -38,13 +38,15 @@ class BuilderTest extends TestCase
         $user = User::factory()->create();
         $project = Project::create(['uuid' => (string) Str::uuid(), 'user_id' => $user->id, 'name' => 'Test page']);
 
-        $created = $this->actingAs($user)->postJson(route('projects.modules.store', $project), ['module_type' => 'standard_text'])->assertCreated();
+        $created = $this->actingAs($user)->postJson(route('projects.modules.store', $project), ['module_type' => 'standard_text'])->assertCreated()
+            ->assertJsonPath('data.version', 1);
         $module = $project->modules()->firstOrFail();
         $content = $module->content;
         $content['headline'] = 'A new world awaits';
         $content['body_html'] = '<p onclick="bad()"><strong>Safe copy</strong><script>alert(1)</script></p>';
 
-        $this->actingAs($user)->patchJson(route('projects.modules.update', [$project, $module]), ['version' => 1, 'content' => $content])->assertOk()->assertJsonPath('data.version', 2);
+        $this->actingAs($user)->patchJson(route('projects.modules.update', [$project, $module]), ['version' => $created->json('data.version'), 'content' => $content])->assertOk()->assertJsonPath('data.version', 2);
+        $this->patchJson(route('projects.modules.update', [$project, $module]), ['version' => $created->json('data.version'), 'content' => $content])->assertStatus(409);
         $this->assertStringNotContainsString('script', $module->fresh()->content['body_html']);
         $this->assertSame('standard_text', $created->json('data.module_type'));
     }

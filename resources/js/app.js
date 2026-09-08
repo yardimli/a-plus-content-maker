@@ -1,5 +1,6 @@
 import './builder';
 import './template-preview';
+import './notifications';
 
 const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
 
@@ -17,13 +18,6 @@ window.apiFetch = async (url, options = {}) => {
         throw error;
     }
     return payload;
-};
-
-window.showToast = (message) => {
-    const region = document.getElementById('toast-region');
-    if (!region) return;
-    const toast = document.createElement('div'); toast.className = 'toast'; toast.textContent = message; region.append(toast);
-    setTimeout(() => toast.remove(), 3800);
 };
 
 document.querySelector('[data-sidebar-toggle]')?.addEventListener('click', () => document.getElementById('app-sidebar')?.classList.toggle('open'));

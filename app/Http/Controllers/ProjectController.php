@@ -49,7 +49,7 @@ class ProjectController extends Controller
             return $project;
         });
 
-        return redirect()->route('projects.builder', $project)->with('success', 'Your A+ project is ready.');
+        return redirect()->route('projects.builder', $project)->with('success', 'Project created. You can now edit your A+ content below.');
     }
 
     public function update(Request $request, Project $project)

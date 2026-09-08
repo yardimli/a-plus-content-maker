@@ -41,13 +41,11 @@
                 <a class="button button-primary" href="{{ route('projects.create') }}">New project</a>
             </header>
             <main class="app-content">
-                @if(session('success'))<div class="flash flash-success" role="status">{{ session('success') }}</div>@endif
-                @if(session('error'))<div class="flash flash-error" role="alert">{{ session('error') }}</div>@endif
                 @yield('content')
             </main>
         </div>
     </div>
-    <div id="toast-region" class="toast-region" aria-live="polite"></div>
+    @include('partials.notifications')
     @stack('scripts')
 </body>
 </html>

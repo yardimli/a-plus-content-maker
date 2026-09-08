@@ -25,5 +25,6 @@
             <div class="auth-card">@yield('content')</div>
         </section>
     </main>
+    @include('partials.notifications', ['statusMessage' => session('status') === 'verification-link-sent' ? 'A fresh verification link has been sent. Check your inbox.' : session('status')])
 </body>
 </html>
