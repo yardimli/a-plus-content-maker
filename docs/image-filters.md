@@ -14,7 +14,12 @@ color looks only; those spatial effects are not implemented.
 Each stack entry is `{ "id": "aden", "values": { "contrast": 1.2 } }`.
 Omitted values inherit that preset's defaults. At most three entries are accepted,
 and each entry processes the previous entry's result. An empty array removes all
-filters. The editor exposes save, reset, removal and reordering controls.
+filters. Open Image filters beneath Assets in the editor sidebar to access the
+dedicated setup page. Filters and sliders appear on the left, with live image
+previews on the right (stacked on narrow screens). The simplified asset chooser
+supports thumbnail search and up to three selections, applied together; Cancel
+keeps the existing preview selection. The page exposes save, reset, removal and
+reordering controls.
 
 An image field named `image` has an adjacent `image_apply_filters` boolean in its
 content object. Missing means true for compatibility. Repeater rows carry their

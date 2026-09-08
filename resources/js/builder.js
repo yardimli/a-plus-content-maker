@@ -126,7 +126,7 @@ if (dataNode) {
             (definition.fields || []).forEach((field) => fields.append(renderField(field, module.content[field.key], (value) => { module.content[field.key] = value; queueSave(module); }, { module, row: module.content })));
             (definition.repeaters || []).forEach((repeater) => fields.append(renderRepeater(module, repeater)));
             elements.list.append(card);
-            const outline = document.createElement('li'); outline.innerHTML = `<span>${String(index + 1).padStart(2, '0')}</span>${esc(definition.name)}`; outline.addEventListener('click', () => card.scrollIntoView({ behavior: 'smooth', block: 'start' })); elements.outline.append(outline);
+            const outline = document.createElement('li'); outline.innerHTML = `<span>${String(index + 1).padStart(2, '0')}</span>${esc(definition.name)}`; outline.addEventListener('click', () => { openBuilderPanel('editor'); card.scrollIntoView({ behavior: 'smooth', block: 'start' }); }); elements.outline.append(outline);
         });
         bindCardActions(); renderPreview();
     }
@@ -608,7 +608,16 @@ if (dataNode) {
     }));
     elements.gallery.addEventListener('click', (event) => { const button = event.target.closest('[data-add-module]'); if (button) addModule(button.dataset.addModule); });
     elements.search.addEventListener('input', (event) => renderGallery(event.target.value));
-    document.querySelectorAll('[data-builder-tab]').forEach((button) => button.addEventListener('click', () => { document.querySelectorAll('[data-builder-tab]').forEach((item) => item.classList.toggle('active', item === button)); document.querySelectorAll('[data-panel]').forEach((panel) => panel.hidden = panel.dataset.panel !== button.dataset.builderTab); if (button.dataset.builderTab === 'preview') renderPreview(); }));
+    function openBuilderPanel(name) {
+        document.querySelectorAll('[data-builder-tab]').forEach(button => {
+            const active = button.dataset.builderTab === name;
+            button.classList.toggle('active', active);
+            button.setAttribute(button.getAttribute('role') === 'tab' ? 'aria-selected' : 'aria-pressed', String(active));
+        });
+        document.querySelectorAll('[data-panel]').forEach(panel => panel.hidden = panel.dataset.panel !== name);
+        if (name === 'preview') renderPreview();
+    }
+    document.querySelectorAll('[data-builder-tab]').forEach(button => button.addEventListener('click', () => openBuilderPanel(button.dataset.builderTab)));
     document.querySelectorAll('[data-preview-width]').forEach((button) => button.addEventListener('click', () => { document.querySelectorAll('[data-preview-width]').forEach((item) => item.classList.toggle('active', item === button)); document.getElementById('preview-frame').classList.toggle('mobile', button.dataset.previewWidth === 'mobile'); }));
     document.getElementById('validate-project').addEventListener('click', validateProject);
     renderGallery(); render();
