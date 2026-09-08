@@ -15,6 +15,11 @@ class ContentTemplate extends Model
 
     protected $casts = ['image_filters' => 'array', 'tags' => 'array', 'is_featured' => 'boolean', 'published_at' => 'datetime'];
 
+    public function getImageFiltersAttribute($value): array
+    {
+        return array_slice(json_decode($value ?: '[]', true) ?: [], 0, 1);
+    }
+
     public function modules()
     {
         return $this->hasMany(TemplateModule::class, 'template_id')->orderBy('position');

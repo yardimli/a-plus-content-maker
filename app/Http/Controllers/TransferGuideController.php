@@ -46,7 +46,7 @@ class TransferGuideController extends Controller
         }
         if ($stack) {
             $bytes = $disk->get($asset->path);
-            $key = 'filtered-images/'.hash('sha256', $bytes.json_encode($filters->operations($stack)).'v2').'.png';
+            $key = 'filtered-images/'.hash('sha256', $bytes.json_encode([$filters->operations($stack), $filters->overlay($stack)]).'v3').'.png';
             $cache = Storage::disk('local');
             if (! $cache->exists($key)) $cache->put($key, $filters->render($bytes, $stack));
             $headers = ['Content-Type' => 'image/png', 'Cache-Control' => 'private, no-cache'];

@@ -14,6 +14,11 @@ class Project extends Model
     protected $fillable = ['image_filters', 'uuid', 'user_id', 'source_template_id', 'name', 'status', 'marketplace', 'asin', 'product_snapshot', 'author_name', 'genre', 'audience', 'tone', 'brand_notes', 'last_saved_at'];
     protected $casts = ['image_filters' => 'array', 'product_snapshot' => 'array', 'last_saved_at' => 'datetime'];
 
+    public function getImageFiltersAttribute($value): array
+    {
+        return array_slice(json_decode($value ?: '[]', true) ?: [], 0, 1);
+    }
+
     public function getRouteKeyName(): string
     {
         return 'uuid';

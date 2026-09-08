@@ -3,7 +3,7 @@ const dataNode = document.getElementById('builder-data');
 
 if (dataNode) {
     const boot = JSON.parse(dataNode.textContent);
-    const state = { ...boot, modules: [...boot.modules].sort((a, b) => a.position - b.position), activeAsset: null, selectedAsset: null, crop: null, aiModule: null, stockSearchResults: [], stockSearchPage: 1 };
+    const state = { ...boot, image_filters: (boot.image_filters || []).slice(0, 1), modules: [...boot.modules].sort((a, b) => a.position - b.position), activeAsset: null, selectedAsset: null, crop: null, aiModule: null, stockSearchResults: [], stockSearchPage: 1 };
     const elements = {
         list: document.getElementById('module-list'), outline: document.getElementById('module-outline'), empty: document.getElementById('builder-empty'),
         gallery: document.getElementById('module-gallery'), moduleDialog: document.getElementById('module-dialog'), search: document.getElementById('module-search'), sampleContent: document.getElementById('populate-module-samples'),

@@ -1,50 +1,61 @@
 # Template image filters
 
-Templates and projects store an independent ordered `image_filters` JSON array.
-Creating a project copies the template stack. Editing either stack afterward does
-not modify the other. Existing templates/projects start with an empty stack.
+Open **Image filters** beneath **Assets** in the editor sidebar. Choose one
+preset, adjust its Filters and Overlay sections, and save. Choosing another
+preset replaces the current preset. Clear All resets the eight color/blur
+controls; Reset preset restores its original settings; Remove filter removes
+both filters and overlay. The asset chooser supports up to three preview images.
 
-The shared catalog is `resources/data/image-filters.json`. It defines preset IDs,
-names, slider labels, units, bounds, steps and default values. The 79 presets are
-authored Instagram-inspired **color approximations**, including classic, story,
-and newer preset names. They are not official Instagram processing recipes.
-Names associated with grain, blur, distortion, or lens effects currently provide
-color looks only; those spatial effects are not implemented.
+The catalog in `resources/data/image-filters.json` defines all preset names,
+descriptions, filter slider ranges, display units, operation order, overlay
+controls and defaults. Contrast, brightness, saturate, sepia, grayscale and invert
+are stored as ratios and displayed as percentages; hue uses degrees and blur
+uses pixels. Overlay types are none, solid, linear gradient and centered radial
+gradient. Colors are six-digit hex with independent alpha sliders, two stops,
+eight linear directions, a blend mode and overall opacity. Radial gradients use
+a centered ellipse reaching the corners. Reversed stops form a hard transition,
+following CSS stop fixup. CSS-wide blend keywords resolve to normal in the
+isolated image context.
 
-Each stack entry is `{ "id": "aden", "values": { "contrast": 1.2 } }`.
-Omitted values inherit that preset's defaults. At most three entries are accepted,
-and each entry processes the previous entry's result. An empty array removes all
-filters. Open Image filters beneath Assets in the editor sidebar to access the
-dedicated setup page. Filters and sliders appear on the left, with live image
-previews on the right (stacked on narrow screens). The simplified asset chooser
-supports thumbnail search and up to three selections, applied together; Cancel
-keeps the existing preview selection. The page exposes save, reset, removal and
-reordering controls.
+Matching classic preset recipes are adapted from
+[cssFilters](https://github.com/Ghosh/cssFilters), copyright 2016 Indrashish Ghosh,
+under the [MIT license](cssfilters-LICENSE.md). Other presets remain authored
+Instagram-inspired approximations. The radial geometry is normalized to the
+image rectangle; grain and lens distortions are not reproduced.
 
-An image field named `image` has an adjacent `image_apply_filters` boolean in its
-content object. Missing means true for compatibility. Repeater rows carry their
-own flags, so reordering and template cloning preserve opt-outs independently of
-asset identity. New/replacement images use their slot's existing setting.
+Templates and projects store `image_filters` as an array with zero or one entry:
 
-Editor and gallery previews use CSS filter functions. The transfer guide loads
-actual rendered images from its authorized download endpoint with `preview=1`.
-Downloads use the same generated PNG bytes, preserve dimensions and alpha, and
-never overwrite source assets. The endpoint validates the project, module and
-image slot before consulting that slot's opt-out. Original downloads retain their
-existing format handling when no filters apply. The JSON export includes the
-stack and per-slot flags for consumers of the manifest.
+```json
+[{"id":"aden","values":{"contrast":1.1,"invert":0.1},"overlay":{"type":"linear","color1":"#2a5e8c","color2":"#ffffff","alpha1":1,"alpha2":0,"stop1":10,"stop2":100,"direction":"to bottom","blend":"screen","opacity":0.5}}]
+```
 
-The PHP renderer follows the sRGB matrices and operation order in the
-[CSS Filter Effects specification](https://www.w3.org/TR/filter-effects-1/).
-Browser color management and intermediate rounding can produce small differences
-between CSS editor previews and the PNG; the transfer preview and download match
-exactly. Generated PNGs are cached privately under `storage/app/filtered-images`
-by source bytes, resolved operations and renderer version. Bump the renderer cache version when
-changing its output. Preset values are included in the resolved operations. This cache can be cleared and regenerated.
+Omitted settings inherit preset defaults. New requests with multiple presets are
+rejected. Legacy stacks use only their first entry consistently in the editor,
+gallery, cloning, manifest and image downloads; saving replaces the stored stack
+with that single entry. Projects receive an independent copy of template settings.
 
-Deployment: run `php artisan migrate` and `npm run build`. PHP GD is required
-(already used by the existing crop/download pipeline).
+An image slot's adjacent `image_apply_filters` boolean (or the corresponding
+field name plus `_apply_filters`) still controls whether the complete effect is
+applied. Missing means true. Repeater rows retain their own flags when reordered.
 
-Verification: `php artisan test --filter=ImageFiltersTest` covers ordered pixel
-processing, transparency, validation, access control, cloning, opt-outs, and
-preview/download parity.
+Rendering follows the reference's order: blend the overlay over the image, then
+apply sepia, brightness, contrast, saturate, grayscale, invert, hue rotation and
+blur. CSS editor previews use an SVG overlay filter followed by CSS functions,
+preserving existing image markup and layouts. Gradient stops are sampled with
+premultiplied sRGB interpolation. The private download renderer implements the
+[W3C blend equations](https://www.w3.org/TR/compositing-1/) and CSS color matrices
+with PHP GD. It approximates Gaussian blur with three box passes (an exact small
+kernel below one pixel), accounting for transparency. PNGs retain the original
+image dimensions, so blur is clipped to those bounds. Overlay opacity can fill
+transparent source pixels, matching source-over composition.
+
+Editor previews can vary slightly with browser rounding, display scaling and
+Gaussian blur implementation. The transfer preview and downloaded PNG use the
+same generated bytes. Per-slot authorization and opt-outs apply before rendering.
+Source assets are never overwritten. The private cache key includes source bytes,
+resolved filter operations, overlay settings and renderer version.
+
+Deploy with `npm run build`. The existing image_filters database columns are
+reused; no additional migration is required for overlays. PHP GD is required.
+Run `php artisan test --filter=ImageFiltersTest` for validation, persistence,
+cloning, opt-outs, pixel behavior, blending and preview/download checks.
