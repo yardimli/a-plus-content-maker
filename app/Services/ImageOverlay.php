@@ -30,11 +30,12 @@ class ImageOverlay
                 $pixel = imagecolorat($image, $x, $y);
                 $back = [(($pixel >> 16)&255)/255, (($pixel >> 8)&255)/255, ($pixel&255)/255];
                 $ba = 1-(($pixel >> 24)&127)/127;
-                $outAlpha = $alpha + $ba*(1-$alpha);
+                if ($ba === 0.0) continue;
+                $outAlpha = $ba;
                 $blend = $this->blend($back, $source, $o['blend']);
                 $out = [];
                 for ($i = 0; $i < 3; $i++) {
-                    $out[$i] = (int) round(255*max(0, min(1, ($alpha*((1-$ba)*$source[$i]+$ba*$blend[$i]) + (1-$alpha)*$ba*$back[$i])/$outAlpha)));
+                    $out[$i] = (int) round(255*max(0, min(1, $alpha*$blend[$i] + (1-$alpha)*$back[$i])));
                 }
                 imagesetpixel($image, $x, $y, ((int) round((1-$outAlpha)*127) << 24) | ($out[0] << 16) | ($out[1] << 8) | $out[2]);
             }

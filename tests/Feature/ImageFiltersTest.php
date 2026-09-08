@@ -65,7 +65,7 @@ class ImageFiltersTest extends TestCase
         $filters = app(ImageFilters::class);
         $filter = ['id' => 'normal', 'values' => ['invert' => 1], 'overlay' => ['type' => 'solid', 'color1' => '#ff0000', 'blend' => 'normal']];
         $image = imagecreatefromstring($filters->render($this->png(), [$filter]));
-        $this->assertSame(0x00ffff, imagecolorat($image, 0, 0)); // red overlay, then invert
+        $this->assertSame((40 << 24) | 0x00ffff, imagecolorat($image, 0, 0)); // red overlay, then invert
         imagedestroy($image);
         $filter = ['id' => 'normal', 'overlay' => ['type' => 'linear', 'color1' => '#000000', 'color2' => '#ffffff', 'direction' => 'to right']];
         $image = imagecreatefromstring($filters->render($this->png(), [$filter]));
@@ -91,6 +91,23 @@ class ImageFiltersTest extends TestCase
         $this->assertLessThan(255, imagecolorat($blurred, 7, 7) & 255);
         $this->assertSame(15, imagesx($blurred));
         imagedestroy($blurred);
+    }
+
+    public function test_overlays_do_not_fill_transparent_image_backgrounds(): void
+    {
+        $image = imagecreatetruecolor(3, 1);
+        imagealphablending($image, false); imagesavealpha($image, true);
+        imagesetpixel($image, 0, 0, 0x7f000000);
+        imagesetpixel($image, 1, 0, (40 << 24) | 0x204080);
+        imagesetpixel($image, 2, 0, 0x204080);
+        ob_start(); imagepng($image); $bytes = ob_get_clean(); imagedestroy($image);
+        foreach (['solid', 'linear', 'radial'] as $type) {
+            $result = imagecreatefromstring(app(ImageFilters::class)->render($bytes, [['id' => 'normal', 'overlay' => ['type' => $type, 'color1' => '#ff00ff', 'color2' => '#ff00ff', 'opacity' => 1]]]));
+            $this->assertSame(127, (imagecolorat($result, 0, 0) >> 24) & 127);
+            $this->assertSame(40, (imagecolorat($result, 1, 0) >> 24) & 127);
+            $this->assertSame(0xff00ff, imagecolorat($result, 2, 0));
+            imagedestroy($result);
+        }
     }
 
     public function test_blend_modes_and_saved_overlay_settings(): void

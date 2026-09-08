@@ -53,9 +53,19 @@ if (dataNode) {
         assets: () => state.assets,
         onChange: stack => { state.image_filters = stack; filtersDirty = true; render(); },
         onSave: async () => {
-            if (state.mode === 'template-create') { document.getElementById('gallery-details-form').requestSubmit(); return; }
+            if (state.mode === 'template-create') {
+                const form = document.getElementById('gallery-details-form');
+                if (!form.checkValidity()) { openBuilderPanel('editor'); form.reportValidity(); return false; }
+                form.requestSubmit();
+                return false; // Creation redirects to the editor only after the server saves it.
+            }
             const saved = await saveFilters();
-            if (saved) window.showToast('Image filters saved');
+            if (saved && !filtersDirty) {
+                openBuilderPanel('editor');
+                document.querySelector('[data-builder-tab="editor"]').focus();
+                document.querySelector('.builder-toolbar').scrollIntoView({ block: 'start' });
+                window.showToast('Image filters saved');
+            }
             return saved;
         },
     });
@@ -609,6 +619,8 @@ if (dataNode) {
     elements.gallery.addEventListener('click', (event) => { const button = event.target.closest('[data-add-module]'); if (button) addModule(button.dataset.addModule); });
     elements.search.addEventListener('input', (event) => renderGallery(event.target.value));
     function openBuilderPanel(name) {
+        document.getElementById('builder').classList.toggle('filters-open', name === 'filters');
+        document.querySelector('.builder-outline').hidden = name === 'filters';
         document.querySelectorAll('[data-builder-tab]').forEach(button => {
             const active = button.dataset.builderTab === name;
             button.classList.toggle('active', active);

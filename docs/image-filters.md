@@ -46,8 +46,9 @@ premultiplied sRGB interpolation. The private download renderer implements the
 [W3C blend equations](https://www.w3.org/TR/compositing-1/) and CSS color matrices
 with PHP GD. It approximates Gaussian blur with three box passes (an exact small
 kernel below one pixel), accounting for transparency. PNGs retain the original
-image dimensions, so blur is clipped to those bounds. Overlay opacity can fill
-transparent source pixels, matching source-over composition.
+image dimensions, so blur is clipped to those bounds. Overlays are masked to the source alpha, leaving transparent pixels and
+letterboxed preview backgrounds untouched. Preview images keep their intrinsic
+aspect ratio so the gradient follows the image bounds.
 
 Editor previews can vary slightly with browser rounding, display scaling and
 Gaussian blur implementation. The transfer preview and downloaded PNG use the
