@@ -13,11 +13,11 @@
             <header class="transfer-module-header"><div><p class="eyebrow">Step 2 · Module {{ $loop->iteration }} of {{ $project->modules->count() }}</p><h2>{{ $definition['name'] }}</h2><p>In KDP, click <strong>Add Module</strong> and select this exact module name.</p>@include('projects.transfer-copy', ['label' => 'module name', 'text' => $definition['name']])</div><img class="transfer-reference" src="{{ asset('images/modules/'.$module->module_type.'.png') }}" alt="{{ $definition['name'] }} field layout" loading="lazy"></header>
             <p class="transfer-hint">{{ $definition['description'] }} Fill the fields below in the matching module.</p>
             @foreach($definition['fields'] ?? [] as $field)
-                @include('projects.transfer-field', ['field' => $field, 'value' => $module->content[$field['key']] ?? null])
+                @include('projects.transfer-field', ['field' => $field, 'value' => $module->content[$field['key']] ?? null, 'slot' => $field['key']])
             @endforeach
             @foreach($definition['repeaters'] ?? [] as $repeater)
                 <div class="transfer-group"><h3>{{ $repeater['label'] }}</h3><p class="transfer-hint">Follow the same order: left to right, then top to bottom.</p>
-                @forelse($module->content[$repeater['key']] ?? [] as $row)
+                @forelse($module->content[$repeater['key']] ?? [] as $rowIndex => $row)
                     <div class="transfer-row"><h4>{{ $repeater['label'] }} {{ $loop->iteration }}</h4>
                     @foreach($repeater['fields'] as $field)
                         @if($module->module_type === 'comparison_chart' && $repeater['key'] === 'metrics' && $field['key'] === 'values')
@@ -26,7 +26,7 @@
                                 <div class="transfer-field"><strong>Column {{ $loop->iteration }} · {{ ($product['title'] ?? '') ?: 'Untitled book' }}</strong>@include('projects.transfer-copy', ['label' => 'column '.$loop->iteration.' value', 'text' => trim($values[$loop->index] ?? '')])</div>
                             @endforeach
                         @else
-                            @include('projects.transfer-field', ['field' => $field, 'value' => $row[$field['key']] ?? null])
+                            @include('projects.transfer-field', ['field' => $field, 'value' => $row[$field['key']] ?? null, 'slot' => $repeater['key'].'.'.$rowIndex.'.'.$field['key']])
                         @endif
                     @endforeach
                     </div>

@@ -39,7 +39,7 @@ class ProjectController extends Controller
             $project = Project::create([
                 ...collect($data)->except(['template_id', 'product_snapshot'])->all(),
                 'uuid' => (string) Str::uuid(), 'user_id' => $request->user()->id,
-                'source_template_id' => $template?->id, 'asin' => isset($data['asin']) ? strtoupper($data['asin']) : null,
+                'image_filters' => $template?->image_filters ?? [], 'source_template_id' => $template?->id, 'asin' => isset($data['asin']) ? strtoupper($data['asin']) : null,
                 'product_snapshot' => ! empty($data['product_snapshot']) ? json_decode($data['product_snapshot'], true) : null,
             ]);
             $assetMap = [];
@@ -56,6 +56,7 @@ class ProjectController extends Controller
     {
         $this->authorize('update', $project);
         $data = $request->validate(['name' => ['sometimes', 'required', 'string', 'max:120'], 'author_name' => ['nullable', 'string', 'max:120'], 'genre' => ['nullable', 'string', 'max:100'], 'audience' => ['nullable', 'string', 'max:200'], 'tone' => ['nullable', 'string', 'max:100'], 'brand_notes' => ['nullable', 'string', 'max:3000']]);
+        $data += app(\App\Services\ImageFilters::class)->validate($request);
         $project->update($data + ['last_saved_at' => now()]);
         return $request->expectsJson() ? response()->json(['ok' => true, 'data' => $project]) : back()->with('success', 'Project updated.');
     }

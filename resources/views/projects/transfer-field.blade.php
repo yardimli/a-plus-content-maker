@@ -1,13 +1,14 @@
 @php
     $value = $value ?? $field['default'] ?? null;
     $asset = $field['type'] === 'image' ? $project->assets->firstWhere('id', $value) : null;
+    $downloadUrl = $asset ? route('projects.transfer.download', [$project, $asset, 'module' => $module->uuid, 'slot' => $slot]) : null;
 @endphp
 <div class="transfer-field">
     <div class="transfer-field-heading"><strong>{{ $field['label'] }}</strong>@if($field['required'] ?? false)<small>Required</small>@endif</div>
     @if($field['type'] === 'image')
         <p class="transfer-hint">Upload to this image slot · {{ $field['width'] }} × {{ $field['height'] }} px</p>
         @if($asset)
-            <div class="transfer-image"><img src="{{ $asset->url }}" alt="{{ $asset->alt_text }}" loading="lazy"><div><a class="button button-secondary" href="{{ route('projects.transfer.download', [$project, $asset]) }}">Download image</a><p class="transfer-hint">{{ $asset->width }} × {{ $asset->height }} px · {{ $asset->mime_type === 'image/webp' ? 'PNG download' : $asset->original_name }}</p></div></div>
+            <div class="transfer-image"><img src="{{ $downloadUrl }}&preview=1" alt="{{ $asset->alt_text }}" loading="lazy"><div><a class="button button-secondary" href="{{ $downloadUrl }}">Download image</a><p class="transfer-hint">{{ $asset->width }} × {{ $asset->height }} px · {{ $asset->mime_type === 'image/webp' ? 'PNG download' : $asset->original_name }}</p></div></div>
             @if($asset->width != $field['width'] || $asset->height != $field['height'])<p class="transfer-missing">Size differs from this slot. Fit the image in the editor before uploading.</p>@endif
             <strong>Image keywords / alt text</strong>
             @include('projects.transfer-copy', ['label' => 'Image keywords / alt text', 'text' => $asset->alt_text])

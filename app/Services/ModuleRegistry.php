@@ -48,11 +48,13 @@ class ModuleRegistry
         $rules = ['content' => ['required', 'array']];
         foreach ($definition['fields'] ?? [] as $field) {
             $rules['content.'.$field['key']] = $this->fieldRules($field);
+            if ($field['type'] === 'image') $rules['content.'.$field['key'].'_apply_filters'] = ['sometimes', 'boolean'];
         }
         foreach ($definition['repeaters'] ?? [] as $repeater) {
             $rules['content.'.$repeater['key']] = ['array', 'min:'.($repeater['min'] ?? 0), 'max:'.$repeater['max']];
             foreach ($repeater['fields'] as $field) {
                 $rules['content.'.$repeater['key'].'.*.'.$field['key']] = $this->fieldRules($field);
+                if ($field['type'] === 'image') $rules['content.'.$repeater['key'].'.*.'.$field['key'].'_apply_filters'] = ['sometimes', 'boolean'];
             }
         }
 

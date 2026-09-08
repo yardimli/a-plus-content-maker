@@ -79,6 +79,7 @@ class TemplateController extends Controller
     private function validated(Request $request): array
     {
         $data = $request->validate(['name' => ['required', 'string', 'max:120'], 'summary' => ['nullable', 'string', 'max:240'], 'description' => ['nullable', 'string', 'max:3000'], 'category' => ['nullable', 'string', 'max:80'], 'status' => ['required', 'in:draft,published,archived'], 'is_featured' => ['nullable', 'boolean']]);
+        $data += app(\App\Services\ImageFilters::class)->validate($request);
         $data['is_featured'] = $request->boolean('is_featured');
         $data['tags'] = array_values(array_filter(array_map('trim', explode(',', (string) $request->input('tags')))));
         return $data;
@@ -109,11 +110,13 @@ class TemplateController extends Controller
         $rules = [];
         foreach ($definition['fields'] ?? [] as $field) {
             $rules[$field['key']] = $this->templateFieldRules($field);
+            if ($field['type'] === 'image') $rules[$field['key'].'_apply_filters'] = ['sometimes', 'boolean'];
         }
         foreach ($definition['repeaters'] ?? [] as $repeater) {
             $rules[$repeater['key']] = ['array', 'min:'.($repeater['min'] ?? 0), 'max:'.$repeater['max']];
             foreach ($repeater['fields'] as $field) {
                 $rules[$repeater['key'].'.*.'.$field['key']] = $this->templateFieldRules($field);
+                if ($field['type'] === 'image') $rules[$repeater['key'].'.*.'.$field['key'].'_apply_filters'] = ['sometimes', 'boolean'];
             }
         }
 

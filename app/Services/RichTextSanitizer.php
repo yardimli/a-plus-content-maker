@@ -13,6 +13,7 @@ class RichTextSanitizer
     public function cleanPayload(array $payload): array
     {
         array_walk_recursive($payload, function (&$value, $key): void {
+            if (str_ends_with((string) $key, '_apply_filters')) $value = (bool) $value;
             if (is_string($value) && str_ends_with((string) $key, '_html')) {
                 $value = $this->clean($value);
             }

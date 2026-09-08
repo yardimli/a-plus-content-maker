@@ -15,7 +15,7 @@ class ExportController extends Controller
         $project->load(['modules', 'assets']);
         $manifest = [
             'format' => 'a-plus-content-maker/v1', 'created_at' => now()->toIso8601String(),
-            'project' => $project->only(['uuid', 'name', 'asin', 'marketplace', 'author_name', 'genre', 'product_snapshot']),
+            'project' => $project->only(['uuid', 'name', 'asin', 'marketplace', 'author_name', 'genre', 'product_snapshot', 'image_filters']),
             'modules' => $project->modules->map->only(['uuid', 'module_type', 'position', 'content', 'settings']),
             'assets' => $project->assets->map->only(['id', 'original_name', 'path', 'width', 'height', 'alt_text']),
             'transfer_note' => 'Use this package as a copy-and-asset checklist. Content must be entered manually in KDP.',

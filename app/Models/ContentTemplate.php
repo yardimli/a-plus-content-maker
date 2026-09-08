@@ -11,9 +11,9 @@ class ContentTemplate extends Model
 
     protected $table = 'templates';
 
-    protected $fillable = ['created_by', 'name', 'slug', 'summary', 'description', 'category', 'tags', 'preview_image', 'status', 'is_featured', 'published_at'];
+    protected $fillable = ['image_filters', 'created_by', 'name', 'slug', 'summary', 'description', 'category', 'tags', 'preview_image', 'status', 'is_featured', 'published_at'];
 
-    protected $casts = ['tags' => 'array', 'is_featured' => 'boolean', 'published_at' => 'datetime'];
+    protected $casts = ['image_filters' => 'array', 'tags' => 'array', 'is_featured' => 'boolean', 'published_at' => 'datetime'];
 
     public function modules()
     {

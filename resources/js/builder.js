@@ -1,3 +1,4 @@
+import { filterCss, mountFilterEditor } from './image-filters';
 const dataNode = document.getElementById('builder-data');
 
 if (dataNode) {
@@ -27,6 +28,37 @@ if (dataNode) {
     const assetById = (id) => state.assets.find((asset) => String(asset.id) === String(id) || String(asset.template_path || '') === String(id));
     const assetReference = (asset) => state.mode.startsWith('template') ? asset.template_path : asset.id;
     const fieldValue = (value) => value ?? '';
+
+
+    let filterSaveChain = Promise.resolve(true);
+    let filtersDirty = false;
+    async function saveFilters() {
+        if (state.mode === 'template-create' || !filtersDirty) return true;
+        const fields = state.mode === 'template' ? Object.fromEntries(new FormData(document.getElementById('gallery-details-form'))) : {};
+        if (state.mode === 'template') fields.is_featured = document.getElementById('gallery-details-form').elements.is_featured.checked;
+        fields.image_filters = structuredClone(state.image_filters);
+        const body = JSON.stringify(fields);
+        filterSaveChain = filterSaveChain.then(async () => {
+            try {
+                await window.apiFetch(state.routes.entitySave, { method: state.mode === 'project' ? 'PATCH' : 'PUT', body });
+                if (JSON.stringify(state.image_filters) === JSON.stringify(fields.image_filters)) filtersDirty = false;
+                return true;
+            } catch (error) { window.showToast(error.message, 'error'); return false; }
+        });
+        return filterSaveChain;
+    }
+    window.addEventListener('beforeunload', event => { if (filtersDirty) { event.preventDefault(); event.returnValue = ''; } });
+    mountFilterEditor(document.getElementById('image-filter-editor'), {
+        stack: state.image_filters,
+        assets: () => state.assets,
+        onChange: stack => { state.image_filters = stack; filtersDirty = true; render(); },
+        onSave: async () => {
+            if (state.mode === 'template-create') { document.getElementById('gallery-details-form').requestSubmit(); return; }
+            const saved = await saveFilters();
+            if (saved) window.showToast('Image filters saved');
+            return saved;
+        },
+    });
 
     function renderGallery(filter = '') {
         elements.gallery.innerHTML = Object.entries(state.registry).filter(([, definition]) => `${definition.name} ${definition.description} ${definition.category}`.toLowerCase().includes(filter.toLowerCase())).map(([key, definition]) => `
@@ -91,7 +123,7 @@ if (dataNode) {
             const card = document.createElement('article'); card.className = 'module-editor'; card.dataset.uuid = module.uuid;
             card.innerHTML = `<header class="module-editor-head"><span>${String(index + 1).padStart(2, '0')}</span><h3>${esc(definition.name)}</h3>${definition.ai_ready ? '<span class="ai-badge">AI ready</span>' : ''}<div class="module-editor-actions">${definition.ai_ready && state.routes.aiText ? '<button type="button" data-ai title="Draft copy with AI">✦ Generate</button>' : ''}<button type="button" data-move="up" title="Move up">↑</button><button type="button" data-move="down" title="Move down">↓</button><button type="button" data-delete title="Remove">×</button></div></header><div class="module-fields"></div>`;
             const fields = card.querySelector('.module-fields');
-            (definition.fields || []).forEach((field) => fields.append(renderField(field, module.content[field.key], (value) => { module.content[field.key] = value; queueSave(module); })));
+            (definition.fields || []).forEach((field) => fields.append(renderField(field, module.content[field.key], (value) => { module.content[field.key] = value; queueSave(module); }, { module, row: module.content })));
             (definition.repeaters || []).forEach((repeater) => fields.append(renderRepeater(module, repeater)));
             elements.list.append(card);
             const outline = document.createElement('li'); outline.innerHTML = `<span>${String(index + 1).padStart(2, '0')}</span>${esc(definition.name)}`; outline.addEventListener('click', () => card.scrollIntoView({ behavior: 'smooth', block: 'start' })); elements.outline.append(outline);
@@ -125,6 +157,15 @@ if (dataNode) {
             button.addEventListener('dragleave', () => button.classList.remove('dragging-over'));
             button.addEventListener('drop', (event) => { event.preventDefault(); button.classList.remove('dragging-over'); const file = event.dataTransfer.files?.[0]; if (!file) return; state.activeAsset = { field, callback: (id) => onChange(id) }; openNewFile(file); });
             wrapper.append(button);
+            const owner = context.row;
+            const flag = `${field.key}_apply_filters`;
+            const checkbox = document.createElement('label'); checkbox.className = 'check-row';
+            checkbox.innerHTML = `<input type="checkbox" ${owner?.[flag] !== false ? 'checked' : ''}> Apply template filters`;
+            checkbox.querySelector('input').addEventListener('change', event => {
+                owner[flag] = event.target.checked; queueSave(context.module); render();
+            });
+            wrapper.append(checkbox);
+            if (button.querySelector('img')) button.querySelector('img').style.filter = owner?.[flag] === false ? 'none' : filterCss(state.image_filters);
         } else if (field.type === 'asin') {
             const control = document.createElement('div'); control.className = 'asin-control';
             const input = document.createElement('input'); input.type = 'text'; input.maxLength = 10; input.value = fieldValue(value); input.placeholder = 'Enter 10-character ASIN';
@@ -239,14 +280,16 @@ if (dataNode) {
         if (link.getAttribute('aria-disabled') === 'true') return;
         link.setAttribute('aria-disabled', 'true');
         elements.list.inert = true;
+        document.getElementById('image-filter-editor').inert = true;
         link.textContent = 'Preparing guide…';
         timers.forEach(clearTimeout); timers.clear();
         await Promise.all([...pendingSaves.values()]);
         const saved = await Promise.all(state.modules.filter(module => dirtyModules.has(module.uuid)).map(saveModule));
-        if (saved.every(Boolean)) window.location.assign(link.href);
+        if (saved.every(Boolean) && await saveFilters()) window.location.assign(link.href);
         else window.showToast('Your latest changes could not be saved. Resolve the save error, then open the guide again.', 'error');
         link.removeAttribute('aria-disabled');
         elements.list.inert = false;
+        document.getElementById('image-filter-editor').inert = false;
         link.textContent = 'Copy to KDP';
     });
 
@@ -464,9 +507,10 @@ if (dataNode) {
         event.preventDefault(); const form = event.currentTarget; const submit = form.querySelector('[type="submit"]');
         submit.disabled = true; submit.textContent = 'Saving…';
         try {
-            const fields = Object.fromEntries(new FormData(form)); fields.is_featured = form.elements.is_featured.checked;
+            const fields = Object.fromEntries(new FormData(form)); fields.is_featured = form.elements.is_featured.checked; fields.image_filters = state.image_filters;
             const creating = state.mode === 'template-create';
             const payload = await window.apiFetch(state.routes.entitySave, { method: creating ? 'POST' : 'PUT', body: JSON.stringify(fields) });
+            filtersDirty = false;
             if (creating && payload.redirect) { window.location.assign(payload.redirect); return; }
             state.project.name = payload.data.name; document.querySelector('.app-topbar h1').textContent = payload.data.name;
             window.showToast('Gallery details saved');
@@ -487,9 +531,9 @@ if (dataNode) {
             : '<div class="builder-empty"><h2>Add modules to preview your page</h2></div>';
     }
 
-    function previewImage(id, className = '') {
+    function previewImage(id, className = '', enabled = true) {
         const asset = assetById(id);
-        return asset ? `<img class="${className}" src="${esc(asset.url)}" alt="${esc(asset.alt_text || '')}">` : '<span class="amazon-missing-image"></span>';
+        return asset ? `<img style="filter:${enabled ? filterCss(state.image_filters) : 'none'}" class="${className}" src="${esc(asset.url)}" alt="${esc(asset.alt_text || '')}">` : '<span class="amazon-missing-image"></span>';
     }
 
     function previewRich(value) { return value ? `<div class="amazon-rich">${value}</div>` : ''; }
@@ -503,41 +547,41 @@ if (dataNode) {
 
         switch (module.module_type) {
             case 'company_logo':
-                return `<section class="amazon-module amazon-logo">${previewImage(c.image)}</section>`;
+                return `<section class="amazon-module amazon-logo">${previewImage(c.image, '', c.image_apply_filters !== false)}</section>`;
             case 'comparison_chart': {
                 const products = c.products || [];
                 const metrics = c.metrics || [];
-                return `<section class="amazon-module amazon-comparison"><div class="amazon-compare-grid" style="--compare-count:${Math.max(products.length, 1)}"><span></span>${products.map((product) => `<article class="${product.highlighted ? 'highlighted' : ''}">${previewImage(product.image)}<strong>${esc(product.title || '')}</strong>${c.show_reviews ? '<span class="amazon-stars">★★★★★</span>' : ''}${c.show_prices ? '<small>Available on Amazon</small>' : ''}${c.show_add_to_cart ? '<button type="button">Shop now</button>' : ''}</article>`).join('')}${metrics.map((metric) => { const values = String(metric.values || '').split('|'); return `<strong class="metric-label">${esc(metric.label || '')}</strong>${products.map((_, index) => `<span class="metric-value">${esc(values[index] || '—')}</span>`).join('')}`; }).join('')}</div></section>`;
+                return `<section class="amazon-module amazon-comparison"><div class="amazon-compare-grid" style="--compare-count:${Math.max(products.length, 1)}"><span></span>${products.map((product) => `<article class="${product.highlighted ? 'highlighted' : ''}">${previewImage(product.image, '', product.image_apply_filters !== false)}<strong>${esc(product.title || '')}</strong>${c.show_reviews ? '<span class="amazon-stars">★★★★★</span>' : ''}${c.show_prices ? '<small>Available on Amazon</small>' : ''}${c.show_add_to_cart ? '<button type="button">Shop now</button>' : ''}</article>`).join('')}${metrics.map((metric) => { const values = String(metric.values || '').split('|'); return `<strong class="metric-label">${esc(metric.label || '')}</strong>${products.map((_, index) => `<span class="metric-value">${esc(values[index] || '—')}</span>`).join('')}`; }).join('')}</div></section>`;
             }
             case 'four_image_text':
-                return `<section class="amazon-module amazon-feature-columns">${previewHeading(c.headline)}<div class="columns four">${items.map((item) => `<article>${previewImage(item.image)}${previewHeading(item.headline, 3)}${previewRich(item.body_html)}</article>`).join('')}</div></section>`;
+                return `<section class="amazon-module amazon-feature-columns">${previewHeading(c.headline)}<div class="columns four">${items.map((item) => `<article>${previewImage(item.image, '', item.image_apply_filters !== false)}${previewHeading(item.headline, 3)}${previewRich(item.body_html)}</article>`).join('')}</div></section>`;
             case 'four_image_quadrant':
-                return `<section class="amazon-module amazon-quadrants">${items.map((item) => `<article>${previewImage(item.image)}<div>${previewHeading(item.headline, 3)}${previewRich(item.body_html)}</div></article>`).join('')}</section>`;
+                return `<section class="amazon-module amazon-quadrants">${items.map((item) => `<article>${previewImage(item.image, '', item.image_apply_filters !== false)}<div>${previewHeading(item.headline, 3)}${previewRich(item.body_html)}</div></article>`).join('')}</section>`;
             case 'dark_text_overlay':
             case 'light_text_overlay':
-                return `<section class="amazon-module amazon-overlay ${module.module_type === 'dark_text_overlay' ? 'dark-copy' : 'light-copy'}">${previewImage(c.background)}<div class="overlay-copy">${previewHeading(c.headline)}${previewRich(c.body_html)}</div></section>`;
+                return `<section class="amazon-module amazon-overlay ${module.module_type === 'dark_text_overlay' ? 'dark-copy' : 'light-copy'}">${previewImage(c.background, '', c.background_apply_filters !== false)}<div class="overlay-copy">${previewHeading(c.headline)}${previewRich(c.body_html)}</div></section>`;
             case 'image_header_text':
-                return `<section class="amazon-module amazon-header-image">${previewHeading(c.top_headline)}${previewImage(c.image)}<div>${previewHeading(c.headline)}${previewRich(c.body_html)}</div></section>`;
+                return `<section class="amazon-module amazon-header-image">${previewHeading(c.top_headline)}${previewImage(c.image, '', c.image_apply_filters !== false)}<div>${previewHeading(c.headline)}${previewRich(c.body_html)}</div></section>`;
             case 'multiple_image_a':
-                return `<section class="amazon-module amazon-multiple"><div class="multiple-main">${previewImage(items[0]?.image)}</div><div class="multiple-copy">${previewHeading(c.headline)}${previewRich(c.description_html)}<div class="multiple-thumbs">${items.map((item) => `<figure>${previewImage(item.image)}<figcaption>${esc(item.caption || '')}</figcaption></figure>`).join('')}</div></div></section>`;
+                return `<section class="amazon-module amazon-multiple"><div class="multiple-main">${previewImage(items[0]?.image, '', items[0]?.image_apply_filters !== false)}</div><div class="multiple-copy">${previewHeading(c.headline)}${previewRich(c.description_html)}<div class="multiple-thumbs">${items.map((item) => `<figure>${previewImage(item.image, '', item.image_apply_filters !== false)}<figcaption>${esc(item.caption || '')}</figcaption></figure>`).join('')}</div></div></section>`;
             case 'product_description_text':
                 return `<section class="amazon-module amazon-product-description">${previewRich(c.body_html)}</section>`;
             case 'single_image_highlights':
-                return `<section class="amazon-module amazon-highlights">${previewImage(c.image)}<div class="highlight-copy">${sections.map((section) => `<article>${previewHeading(section.subheadline, 3)}${previewRich(section.body_html)}</article>`).join('')}</div><aside>${previewHeading(c.highlights_headline, 3)}<ul>${bullets.map((bullet) => `<li>${esc(bullet.text || '')}</li>`).join('')}</ul></aside></section>`;
+                return `<section class="amazon-module amazon-highlights">${previewImage(c.image, '', c.image_apply_filters !== false)}<div class="highlight-copy">${sections.map((section) => `<article>${previewHeading(section.subheadline, 3)}${previewRich(section.body_html)}</article>`).join('')}</div><aside>${previewHeading(c.highlights_headline, 3)}<ul>${bullets.map((bullet) => `<li>${esc(bullet.text || '')}</li>`).join('')}</ul></aside></section>`;
             case 'single_image_sidebar':
-                return `<section class="amazon-module amazon-sidebar"><figure>${previewImage(c.primary_image)}${c.image_caption ? `<figcaption>${esc(c.image_caption)}</figcaption>` : ''}</figure><div>${previewHeading(c.headline)}${previewHeading(c.subheadline, 3)}${previewRich(c.body_html)}${bullets.length ? `<ul>${bullets.map((bullet) => `<li>${esc(bullet.text || '')}</li>`).join('')}</ul>` : ''}</div><aside>${previewImage(c.sidebar_image)}${previewHeading(c.sidebar_headline, 3)}${previewRich(c.sidebar_body_html)}</aside></section>`;
+                return `<section class="amazon-module amazon-sidebar"><figure>${previewImage(c.primary_image, '', c.primary_image_apply_filters !== false)}${c.image_caption ? `<figcaption>${esc(c.image_caption)}</figcaption>` : ''}</figure><div>${previewHeading(c.headline)}${previewHeading(c.subheadline, 3)}${previewRich(c.body_html)}${bullets.length ? `<ul>${bullets.map((bullet) => `<li>${esc(bullet.text || '')}</li>`).join('')}</ul>` : ''}</div><aside>${previewImage(c.sidebar_image, '', c.sidebar_image_apply_filters !== false)}${previewHeading(c.sidebar_headline, 3)}${previewRich(c.sidebar_body_html)}</aside></section>`;
             case 'single_image_specs_detail':
-                return `<section class="amazon-module amazon-spec-detail">${previewHeading(c.headline)}<div class="spec-detail-grid">${previewImage(c.image)}${sections.map((section) => `<article>${previewHeading(section.headline, 3)}${previewHeading(section.subheadline, 4)}${previewRich(section.body_html)}</article>`).join('')}</div></section>`;
+                return `<section class="amazon-module amazon-spec-detail">${previewHeading(c.headline)}<div class="spec-detail-grid">${previewImage(c.image, '', c.image_apply_filters !== false)}${sections.map((section) => `<article>${previewHeading(section.headline, 3)}${previewHeading(section.subheadline, 4)}${previewRich(section.body_html)}</article>`).join('')}</div></section>`;
             case 'single_left_image':
-                return `<section class="amazon-module amazon-single-image left">${previewImage(c.image)}<div>${previewHeading(c.headline)}${previewRich(c.body_html)}</div></section>`;
+                return `<section class="amazon-module amazon-single-image left">${previewImage(c.image, '', c.image_apply_filters !== false)}<div>${previewHeading(c.headline)}${previewRich(c.body_html)}</div></section>`;
             case 'single_right_image':
-                return `<section class="amazon-module amazon-single-image right"><div>${previewHeading(c.headline)}${previewRich(c.body_html)}</div>${previewImage(c.image)}</section>`;
+                return `<section class="amazon-module amazon-single-image right"><div>${previewHeading(c.headline)}${previewRich(c.body_html)}</div>${previewImage(c.image, '', c.image_apply_filters !== false)}</section>`;
             case 'technical_specifications':
                 return `<section class="amazon-module amazon-tech-specs">${previewHeading(c.headline)}<div class="spec-rows columns-${esc(c.columns || '1')}">${(c.specifications || []).map((spec) => `<div><strong>${esc(spec.specification || '')}</strong><span>${esc(spec.definition || '')}</span></div>`).join('')}</div></section>`;
             case 'standard_text':
                 return `<section class="amazon-module amazon-standard-text">${previewHeading(c.headline)}${previewRich(c.body_html)}</section>`;
             case 'three_images_text':
-                return `<section class="amazon-module amazon-feature-columns">${previewHeading(c.headline)}<div class="columns three">${items.map((item) => `<article>${previewImage(item.image)}${previewHeading(item.headline, 3)}${previewRich(item.body_html)}</article>`).join('')}</div></section>`;
+                return `<section class="amazon-module amazon-feature-columns">${previewHeading(c.headline)}<div class="columns three">${items.map((item) => `<article>${previewImage(item.image, '', item.image_apply_filters !== false)}${previewHeading(item.headline, 3)}${previewRich(item.body_html)}</article>`).join('')}</div></section>`;
             default:
                 return '';
         }
