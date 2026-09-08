@@ -15,6 +15,8 @@ if (dataNode) {
         moduleLimitMessage: document.getElementById('module-limit-message'), addModuleButtons: document.querySelectorAll('[data-open-module-dialog]'),
     };
     const timers = new Map();
+    const pendingSaves = new Map();
+    const dirtyModules = new Set();
     const toolbar = document.querySelector('.builder-toolbar');
     const toolbarObserver = new ResizeObserver(() => {
         document.getElementById('builder').style.setProperty('--builder-toolbar-height', `${toolbar.getBoundingClientRect().height}px`);
@@ -207,17 +209,46 @@ if (dataNode) {
     }
 
     function queueSave(module) {
+        dirtyModules.add(module.uuid);
         elements.save.className = 'save-state saving'; elements.save.innerHTML = '<span></span>Saving…'; clearTimeout(timers.get(module.uuid));
-        timers.set(module.uuid, setTimeout(() => saveModule(module), 750));
+        timers.set(module.uuid, setTimeout(() => { timers.delete(module.uuid); saveModule(module); }, 750));
     }
 
-    async function saveModule(module) {
+    function saveModule(module) {
+        const previous = pendingSaves.get(module.uuid) || Promise.resolve();
+        const pending = previous.then(() => persistModule(module));
+        pendingSaves.set(module.uuid, pending);
+        pending.finally(() => { if (pendingSaves.get(module.uuid) === pending) pendingSaves.delete(module.uuid); });
+        return pending;
+    }
+
+    async function persistModule(module) {
         try {
+            const savedContent = JSON.stringify(module.content);
             const body = { content: module.content }; if (state.mode === 'project') body.version = module.version;
             const payload = await window.apiFetch(`${state.routes.moduleBase}/${module.uuid}`, { method: 'PATCH', body: JSON.stringify(body) });
             if (payload.data.version !== undefined) module.version = payload.data.version; elements.save.className = 'save-state'; elements.save.innerHTML = '<span></span>All changes saved'; renderPreview();
-        } catch (error) { elements.save.className = 'save-state error'; elements.save.innerHTML = `<span></span>${esc(error.message)}`; }
+            if (JSON.stringify(module.content) === savedContent) dirtyModules.delete(module.uuid);
+            return true;
+        } catch (error) { elements.save.className = 'save-state error'; elements.save.innerHTML = `<span></span>${esc(error.message)}`; return false; }
     }
+
+    document.getElementById('open-transfer-guide')?.addEventListener('click', async (event) => {
+        event.preventDefault();
+        const link = event.currentTarget;
+        if (link.getAttribute('aria-disabled') === 'true') return;
+        link.setAttribute('aria-disabled', 'true');
+        elements.list.inert = true;
+        link.textContent = 'Preparing guide…';
+        timers.forEach(clearTimeout); timers.clear();
+        await Promise.all([...pendingSaves.values()]);
+        const saved = await Promise.all(state.modules.filter(module => dirtyModules.has(module.uuid)).map(saveModule));
+        if (saved.every(Boolean)) window.location.assign(link.href);
+        else window.showToast('Your latest changes could not be saved. Resolve the save error, then open the guide again.', 'error');
+        link.removeAttribute('aria-disabled');
+        elements.list.inert = false;
+        link.textContent = 'Copy to KDP';
+    });
 
     function updateAssetSummary() {
         const summary = document.querySelector('.asset-summary strong');

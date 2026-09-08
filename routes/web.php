@@ -11,6 +11,7 @@ use App\Http\Controllers\AssetController;
 use App\Http\Controllers\BuilderController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExportController;
+use App\Http\Controllers\TransferGuideController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
@@ -44,6 +45,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/projects/{project}/ai/text', [AiController::class, 'text'])->middleware('throttle:10,1')->name('projects.ai.text');
     Route::post('/projects/{project}/ai/image', [AiController::class, 'image'])->middleware('throttle:5,1')->name('projects.ai.image');
     Route::post('/projects/{project}/export', [ExportController::class, 'store'])->name('projects.export');
+    Route::get('/projects/{project}/transfer', [TransferGuideController::class, 'show'])->name('projects.transfer');
+    Route::get('/projects/{project}/transfer/images/{asset}', [TransferGuideController::class, 'download'])->name('projects.transfer.download');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

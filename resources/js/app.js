@@ -1,6 +1,7 @@
 import './builder';
 import './template-preview';
 import './notifications';
+import './transfer-guide';
 
 const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
 
