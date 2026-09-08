@@ -69,7 +69,8 @@
         "sepia": 0,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Keeps the original colors and lighting."
     },
     {
       "id": "1977",
@@ -81,7 +82,8 @@
         "sepia": 0.1,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Brightens the image with vivid colors and a warm tint."
     },
     {
       "id": "aden",
@@ -93,7 +95,8 @@
         "sepia": 0.2,
         "grayscale": 0,
         "hue-rotate": -10
-      }
+      },
+      "description": "Softens contrast and colors with a warm pastel tint."
     },
     {
       "id": "amaro",
@@ -105,7 +108,8 @@
         "sepia": 0.1,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Lifts brightness and color for a soft, warm finish."
     },
     {
       "id": "ashby",
@@ -117,7 +121,8 @@
         "sepia": 0.35,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Adds a warm tint with softer contrast."
     },
     {
       "id": "brannan",
@@ -129,7 +134,8 @@
         "sepia": 0.5,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Deepens contrast and adds a muted sepia tone."
     },
     {
       "id": "brooklyn",
@@ -141,7 +147,8 @@
         "sepia": 0.15,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Brightens shadows with soft contrast and gentle warmth."
     },
     {
       "id": "charmes",
@@ -153,7 +160,8 @@
         "sepia": 0.25,
         "grayscale": 0,
         "hue-rotate": -5
-      }
+      },
+      "description": "Adds warmth and richer colors with a slight rosy shift."
     },
     {
       "id": "clarendon",
@@ -165,7 +173,8 @@
         "sepia": 0,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Boosts contrast and color for a crisp, vivid look."
     },
     {
       "id": "crema",
@@ -177,7 +186,8 @@
         "sepia": 0.2,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Softens colors and contrast with a creamy warm tint."
     },
     {
       "id": "dogpatch",
@@ -189,7 +199,8 @@
         "sepia": 0.2,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Adds stronger contrast and muted, warm colors."
     },
     {
       "id": "earlybird",
@@ -201,7 +212,8 @@
         "sepia": 0.4,
         "grayscale": 0,
         "hue-rotate": -5
-      }
+      },
+      "description": "Creates a faded, warm vintage look."
     },
     {
       "id": "gingham",
@@ -213,7 +225,8 @@
         "sepia": 0.05,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Fades contrast and color for a soft, washed look."
     },
     {
       "id": "ginza",
@@ -225,7 +238,8 @@
         "sepia": 0.1,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Gently boosts brightness, contrast, and warm colors."
     },
     {
       "id": "hefe",
@@ -237,7 +251,8 @@
         "sepia": 0.2,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Intensifies contrast and color with a warm tint."
     },
     {
       "id": "helena",
@@ -249,7 +264,8 @@
         "sepia": 0.15,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Makes colors richer with a touch of warmth."
     },
     {
       "id": "hudson",
@@ -261,7 +277,8 @@
         "sepia": 0,
         "grayscale": 0,
         "hue-rotate": 10
-      }
+      },
+      "description": "Brightens the image and shifts hues with softer contrast."
     },
     {
       "id": "inkwell",
@@ -273,7 +290,8 @@
         "sepia": 0,
         "grayscale": 1,
         "hue-rotate": 0
-      }
+      },
+      "description": "Creates bright black-and-white tones with added contrast."
     },
     {
       "id": "juno",
@@ -285,7 +303,8 @@
         "sepia": 0.1,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Boosts color and contrast with gentle warmth."
     },
     {
       "id": "kelvin",
@@ -297,7 +316,8 @@
         "sepia": 0.5,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Adds a strong golden tint and vivid colors."
     },
     {
       "id": "lark",
@@ -309,7 +329,8 @@
         "sepia": 0,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Brightens the image with softer contrast and richer colors."
     },
     {
       "id": "lo-fi",
@@ -321,7 +342,8 @@
         "sepia": 0,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Adds strong contrast and slightly richer colors."
     },
     {
       "id": "ludwig",
@@ -333,7 +355,8 @@
         "sepia": 0.1,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Gently brightens the image with restrained, warm colors."
     },
     {
       "id": "maven",
@@ -345,7 +368,8 @@
         "sepia": 0.25,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Mutes colors and adds a soft sepia tint."
     },
     {
       "id": "mayfair",
@@ -357,7 +381,8 @@
         "sepia": 0.15,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Gently boosts brightness, contrast, and warm colors."
     },
     {
       "id": "moon",
@@ -369,7 +394,8 @@
         "sepia": 0.1,
         "grayscale": 1,
         "hue-rotate": 0
-      }
+      },
+      "description": "Creates bright black-and-white tones with crisp contrast."
     },
     {
       "id": "nashville",
@@ -381,7 +407,8 @@
         "sepia": 0.25,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Creates bright, faded colors with a warm tint."
     },
     {
       "id": "perpetua",
@@ -393,7 +420,8 @@
         "sepia": 0.1,
         "grayscale": 0,
         "hue-rotate": 5
-      }
+      },
+      "description": "Softens contrast and gently shifts warm, rich colors."
     },
     {
       "id": "reyes",
@@ -405,7 +433,8 @@
         "sepia": 0.25,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Fades colors and contrast for a light sepia look."
     },
     {
       "id": "rise",
@@ -417,7 +446,8 @@
         "sepia": 0.25,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Brightens the image with soft contrast and warm colors."
     },
     {
       "id": "sierra",
@@ -429,7 +459,8 @@
         "sepia": 0.3,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Softens colors and contrast with a warm vintage tint."
     },
     {
       "id": "skyline",
@@ -441,7 +472,8 @@
         "sepia": 0,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Boosts brightness, contrast, and color for a clear finish."
     },
     {
       "id": "slumber",
@@ -453,7 +485,8 @@
         "sepia": 0.3,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Mutes colors and contrast with a sleepy warm tint."
     },
     {
       "id": "stinson",
@@ -465,7 +498,8 @@
         "sepia": 0.2,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Creates soft, faded colors with gentle warmth."
     },
     {
       "id": "sutro",
@@ -477,7 +511,8 @@
         "sepia": 0.4,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Darkens the image with deep contrast and sepia tones."
     },
     {
       "id": "toaster",
@@ -489,7 +524,8 @@
         "sepia": 0.4,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Adds deep contrast and a strong warm tint."
     },
     {
       "id": "valencia",
@@ -501,7 +537,8 @@
         "sepia": 0.2,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Brightens warm colors with slightly softer contrast."
     },
     {
       "id": "vesper",
@@ -513,7 +550,8 @@
         "sepia": 0.3,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Boosts brightness and warm colors with added contrast."
     },
     {
       "id": "walden",
@@ -525,7 +563,8 @@
         "sepia": 0.2,
         "grayscale": 0,
         "hue-rotate": 5
-      }
+      },
+      "description": "Brightens colors with soft contrast and a warm hue shift."
     },
     {
       "id": "willow",
@@ -537,7 +576,8 @@
         "sepia": 0.15,
         "grayscale": 1,
         "hue-rotate": 0
-      }
+      },
+      "description": "Creates soft, bright black-and-white tones."
     },
     {
       "id": "x-pro-ii",
@@ -549,7 +589,8 @@
         "sepia": 0.3,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Adds bold contrast, rich colors, and a sepia tint."
     },
     {
       "id": "fade",
@@ -561,7 +602,8 @@
         "sepia": 0,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Lifts brightness while fading contrast and color."
     },
     {
       "id": "fade-warm",
@@ -573,7 +615,8 @@
         "sepia": 0.25,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Fades colors and contrast with a warm tint."
     },
     {
       "id": "fade-cool",
@@ -585,7 +628,8 @@
         "sepia": 0,
         "grayscale": 0,
         "hue-rotate": 12
-      }
+      },
+      "description": "Fades colors and contrast with a subtle hue shift."
     },
     {
       "id": "simple",
@@ -597,7 +641,8 @@
         "sepia": 0,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Gently lifts brightness, contrast, and color."
     },
     {
       "id": "simple-warm",
@@ -609,7 +654,8 @@
         "sepia": 0.15,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Gently enhances the image with a warm tint."
     },
     {
       "id": "simple-cool",
@@ -621,7 +667,8 @@
         "sepia": 0,
         "grayscale": 0,
         "hue-rotate": 8
-      }
+      },
+      "description": "Gently enhances the image with a subtle hue shift."
     },
     {
       "id": "boost",
@@ -633,7 +680,8 @@
         "sepia": 0,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Makes the image brighter with bold contrast and color."
     },
     {
       "id": "boost-warm",
@@ -645,7 +693,8 @@
         "sepia": 0.2,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Boosts brightness and vivid colors with a warm tint."
     },
     {
       "id": "boost-cool",
@@ -657,7 +706,8 @@
         "sepia": 0,
         "grayscale": 0,
         "hue-rotate": 10
-      }
+      },
+      "description": "Boosts brightness and vivid colors with a hue shift."
     },
     {
       "id": "graphite",
@@ -669,7 +719,8 @@
         "sepia": 0,
         "grayscale": 1,
         "hue-rotate": 0
-      }
+      },
+      "description": "Creates bold black-and-white tones with deep contrast."
     },
     {
       "id": "hyper",
@@ -681,7 +732,8 @@
         "sepia": 0,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Strongly boosts contrast and color for a vivid finish."
     },
     {
       "id": "rosy",
@@ -693,7 +745,8 @@
         "sepia": 0.15,
         "grayscale": 0,
         "hue-rotate": -15
-      }
+      },
+      "description": "Brightens the image with a soft, rosy hue shift."
     },
     {
       "id": "emerald",
@@ -705,7 +758,8 @@
         "sepia": 0.15,
         "grayscale": 0,
         "hue-rotate": 25
-      }
+      },
+      "description": "Adds richer colors and a greenward hue shift."
     },
     {
       "id": "midnight",
@@ -717,7 +771,8 @@
         "sepia": 0,
         "grayscale": 0,
         "hue-rotate": 10
-      }
+      },
+      "description": "Darkens the image with deep contrast and muted colors."
     },
     {
       "id": "grainy",
@@ -729,7 +784,8 @@
         "sepia": 0.1,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Adds muted, warm colors without a grain texture."
     },
     {
       "id": "gritty",
@@ -741,7 +797,8 @@
         "sepia": 0.1,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Adds harsh contrast and muted colors without texture."
     },
     {
       "id": "halo",
@@ -753,7 +810,8 @@
         "sepia": 0.1,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Brightens the image with soft contrast and gentle warmth."
     },
     {
       "id": "color-leak",
@@ -765,7 +823,8 @@
         "sepia": 0.25,
         "grayscale": 0,
         "hue-rotate": -15
-      }
+      },
+      "description": "Adds rich, warm shifted colors without a light-leak overlay."
     },
     {
       "id": "soft-light",
@@ -777,7 +836,8 @@
         "sepia": 0.1,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Softens contrast and colors with a bright, warm finish."
     },
     {
       "id": "zoom-blur",
@@ -789,7 +849,8 @@
         "sepia": 0,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Softens contrast and lifts brightness without blurring."
     },
     {
       "id": "handheld",
@@ -801,11 +862,12 @@
         "sepia": 0.1,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Adds muted, warm contrast without motion blur."
     },
     {
-      "id": "moir\u00e9",
-      "name": "Moir\u00e9",
+      "id": "moiré",
+      "name": "Moiré",
       "values": {
         "brightness": 1,
         "contrast": 1.2,
@@ -813,7 +875,8 @@
         "sepia": 0,
         "grayscale": 0,
         "hue-rotate": 15
-      }
+      },
+      "description": "Adds strong colors and a hue shift without a pattern."
     },
     {
       "id": "lo-res",
@@ -825,7 +888,8 @@
         "sepia": 0.2,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Mutes colors and contrast without reducing resolution."
     },
     {
       "id": "wide-angle",
@@ -837,7 +901,8 @@
         "sepia": 0,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Gently boosts brightness and contrast without distortion."
     },
     {
       "id": "wavy",
@@ -849,7 +914,8 @@
         "sepia": 0,
         "grayscale": 0,
         "hue-rotate": 10
-      }
+      },
+      "description": "Brightens shifted colors without warping the image."
     },
     {
       "id": "paris",
@@ -861,7 +927,8 @@
         "sepia": 0.1,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Softens contrast and colors with gentle warmth."
     },
     {
       "id": "los-angeles",
@@ -873,7 +940,8 @@
         "sepia": 0.15,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Boosts brightness and warm colors with crisp contrast."
     },
     {
       "id": "oslo",
@@ -885,7 +953,8 @@
         "sepia": 0,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Brightens the image with restrained colors."
     },
     {
       "id": "lagos",
@@ -897,7 +966,8 @@
         "sepia": 0.2,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Adds strong, warm colors and deeper contrast."
     },
     {
       "id": "melbourne",
@@ -909,7 +979,8 @@
         "sepia": 0,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Mutes colors with slightly softer contrast."
     },
     {
       "id": "jakarta",
@@ -921,7 +992,8 @@
         "sepia": 0.3,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Adds a warm sepia tint with stronger contrast."
     },
     {
       "id": "abu-dhabi",
@@ -933,7 +1005,8 @@
         "sepia": 0.35,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Brightens golden colors with softer contrast."
     },
     {
       "id": "buenos-aires",
@@ -945,7 +1018,8 @@
         "sepia": 0.15,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Adds bright, warm colors and stronger contrast."
     },
     {
       "id": "new-york",
@@ -957,7 +1031,8 @@
         "sepia": 0.2,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Adds crisp contrast with a warm tint."
     },
     {
       "id": "jaipur",
@@ -969,7 +1044,8 @@
         "sepia": 0.3,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Adds bright, rich colors with a golden tint."
     },
     {
       "id": "cairo",
@@ -981,7 +1057,8 @@
         "sepia": 0.4,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Softens contrast with a strong sepia tint."
     },
     {
       "id": "tokyo",
@@ -993,7 +1070,8 @@
         "sepia": 0,
         "grayscale": 1,
         "hue-rotate": 0
-      }
+      },
+      "description": "Creates black-and-white tones with strong contrast."
     },
     {
       "id": "rio-de-janeiro",
@@ -1005,7 +1083,8 @@
         "sepia": 0,
         "grayscale": 0,
         "hue-rotate": 0
-      }
+      },
+      "description": "Boosts brightness and contrast with highly vivid colors."
     }
   ]
 }
