@@ -2,6 +2,7 @@ import './builder';
 import './template-preview';
 import './notifications';
 import './transfer-guide';
+import '../css/editor.css';
 
 const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
 
@@ -21,7 +22,26 @@ window.apiFetch = async (url, options = {}) => {
     return payload;
 };
 
-document.querySelector('[data-sidebar-toggle]')?.addEventListener('click', () => document.getElementById('app-sidebar')?.classList.toggle('open'));
+const sidebarToggle = document.querySelector('[data-sidebar-toggle]');
+const sidebar = document.getElementById('app-sidebar');
+const sidebarMedia = window.matchMedia('(max-width: 760px)');
+function setSidebarOpen(open, restoreFocus = false) {
+    if (!sidebar || !sidebarToggle) return;
+    sidebar.classList.toggle('open', open);
+    sidebarToggle.setAttribute('aria-expanded', String(open));
+    sidebar.inert = (document.body.classList.contains('editor-page') || sidebarMedia.matches) && !open;
+    if (open) sidebar.querySelector('a')?.focus();
+    if (restoreFocus) sidebarToggle.focus();
+}
+sidebarToggle?.addEventListener('click', () => setSidebarOpen(!sidebar.classList.contains('open')));
+document.addEventListener('click', event => {
+    if (sidebar?.classList.contains('open') && !sidebar.contains(event.target) && !sidebarToggle.contains(event.target)) setSidebarOpen(false);
+});
+document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && sidebar?.classList.contains('open')) setSidebarOpen(false, true);
+});
+sidebarMedia.addEventListener('change', () => setSidebarOpen(false));
+setSidebarOpen(false);
 document.querySelectorAll('form[data-confirm]').forEach((form) => form.addEventListener('submit', (event) => { if (!confirm(form.dataset.confirm)) event.preventDefault(); }));
 
 const lookupButton = document.getElementById('asin-lookup');

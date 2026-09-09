@@ -14,7 +14,7 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @stack('head')
 </head>
-<body class="app-body">
+<body class="app-body @yield('body-class')">
     <div class="app-shell">
         <aside class="app-sidebar" id="app-sidebar">
             <a href="{{ route('dashboard') }}" class="brand"><span class="brand-mark">A+</span><span>Content Maker<small>Author studio</small></span></a>
@@ -36,7 +36,7 @@
         </aside>
         <div class="app-main">
             <header class="app-topbar">
-                <button class="menu-button" type="button" data-sidebar-toggle aria-label="Toggle navigation">☰</button>
+                <button class="menu-button" type="button" data-sidebar-toggle aria-label="Toggle navigation" aria-controls="app-sidebar" aria-expanded="false">☰</button>
                 <div><p class="eyebrow">A+ Content Maker</p><h1>@yield('page-title', 'Author studio')</h1></div>
                 <a class="button button-primary" href="{{ route('projects.create') }}">New project</a>
             </header>

@@ -1,4 +1,5 @@
 import { filterCss } from './image-filters';
+import { renderMultipleImagePreview } from './multiple-image-preview';
 const escapeHtml = (value = '') => String(value).replace(/[&<>'"]/g, (character) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;',
 }[character]));
@@ -30,7 +31,7 @@ export function renderTemplateModule(module) {
         case 'image_header_text':
             return `<section class="amazon-module amazon-header-image">${previewHeading(content.top_headline)}${previewImage(content.image, content.image_apply_filters !== false)}<div>${previewHeading(content.headline)}${previewRich(content.body_html)}</div></section>`;
         case 'multiple_image_a':
-            return `<section class="amazon-module amazon-multiple"><div class="multiple-main">${previewImage(items[0]?.image, items[0]?.image_apply_filters !== false)}</div><div class="multiple-copy">${previewHeading(content.headline)}${previewRich(content.description_html)}<div class="multiple-thumbs">${items.map((item) => `<figure>${previewImage(item.image, item.image_apply_filters !== false)}<figcaption>${escapeHtml(item.caption || '')}</figcaption></figure>`).join('')}</div></div></section>`;
+            return renderMultipleImagePreview(items, previewHeading(content.headline) + previewRich(content.description_html), item => previewImage(item.image, item.image_apply_filters !== false));
         case 'product_description_text':
             return `<section class="amazon-module amazon-product-description">${previewRich(content.body_html)}</section>`;
         case 'single_image_highlights':

@@ -1,4 +1,5 @@
 import { filterCss, mountFilterEditor } from './image-filters';
+import { renderMultipleImagePreview } from './multiple-image-preview';
 const dataNode = document.getElementById('builder-data');
 
 if (dataNode) {
@@ -16,6 +17,7 @@ if (dataNode) {
         moduleLimitMessage: document.getElementById('module-limit-message'), addModuleButtons: document.querySelectorAll('[data-open-module-dialog]'),
     };
     const timers = new Map();
+    const multipleImageEditors = new Map();
     const pendingSaves = new Map();
     const dirtyModules = new Set();
     const toolbar = document.querySelector('.builder-toolbar');
@@ -130,19 +132,99 @@ if (dataNode) {
         elements.outline.innerHTML = '';
         state.modules.forEach((module, index) => {
             const definition = state.registry[module.module_type];
-            const card = document.createElement('article'); card.className = 'module-editor'; card.dataset.uuid = module.uuid;
+            const card = document.createElement('article'); card.className = 'module-editor'; card.dataset.uuid = module.uuid; card.dataset.moduleType = module.module_type;
             card.innerHTML = `<header class="module-editor-head"><span>${String(index + 1).padStart(2, '0')}</span><h3>${esc(definition.name)}</h3>${definition.ai_ready ? '<span class="ai-badge">AI ready</span>' : ''}<div class="module-editor-actions">${definition.ai_ready && state.routes.aiText ? '<button type="button" data-ai title="Draft copy with AI">✦ Generate</button>' : ''}<button type="button" data-move="up" title="Move up">↑</button><button type="button" data-move="down" title="Move down">↓</button><button type="button" data-delete title="Remove">×</button></div></header><div class="module-fields"></div>`;
             const fields = card.querySelector('.module-fields');
+            if (module.module_type === 'multiple_image_a') {
+                renderMultipleImageEditor(fields, module, definition);
+            } else {
             (definition.fields || []).forEach((field) => fields.append(renderField(field, module.content[field.key], (value) => { module.content[field.key] = value; queueSave(module); }, { module, row: module.content })));
             (definition.repeaters || []).forEach((repeater) => fields.append(renderRepeater(module, repeater)));
+            arrangeModuleFields(fields, module.module_type);
+            }
             elements.list.append(card);
             const outline = document.createElement('li'); outline.innerHTML = `<span>${String(index + 1).padStart(2, '0')}</span>${esc(definition.name)}`; outline.addEventListener('click', () => { openBuilderPanel('editor'); card.scrollIntoView({ behavior: 'smooth', block: 'start' }); }); elements.outline.append(outline);
         });
         bindCardActions(); renderPreview();
     }
 
+    function renderMultipleImageEditor(fields, module, definition) {
+        let editor = multipleImageEditors.get(module.uuid);
+        if (!editor || editor.items !== module.content.items) {
+            const slots = [...(module.content.items || [])];
+            while (slots.length < 4) slots.push({ image: null, caption: null });
+            editor = { items: module.content.items, slots, selected: 0 };
+            multipleImageEditors.set(module.uuid, editor);
+        }
+        const sync = () => {
+            module.content.items = editor.slots.filter(row => row.image || row.caption);
+            if (!module.content.items.length) module.content.items = [editor.slots[0]];
+            editor.items = module.content.items;
+            queueSave(module);
+        };
+        const imageField = definition.repeaters[0].fields.find(field => field.type === 'image');
+        const captionField = definition.repeaters[0].fields.find(field => field.key === 'caption');
+        const stage = document.createElement('div'); stage.className = 'multiple-editor-stage';
+        const copy = document.createElement('div'); copy.className = 'module-column multiple-editor-copy';
+        definition.fields.forEach(field => copy.append(renderField(field, module.content[field.key], value => { module.content[field.key] = value; queueSave(module); }, { module, row: module.content })));
+        const thumbnails = document.createElement('div'); thumbnails.className = 'multiple-editor-thumbnails';
+        const select = index => {
+            editor.selected = index;
+            const row = editor.slots[index];
+            stage.replaceChildren(renderField(imageField, row.image, value => { row.image = value; sync(); }, { module, row, editExisting: true }));
+            const imageButton = stage.querySelector('.image-field');
+            imageButton.setAttribute('aria-label', `${row.image ? 'Edit' : 'Add'} image ${index + 1}`);
+            if (row.image) {
+                const edit = document.createElement('span'); edit.className = 'multiple-editor-edit'; edit.textContent = 'Edit image'; imageButton.append(edit);
+                const replace = document.createElement('button'); replace.type = 'button'; replace.className = 'text-button'; replace.textContent = 'Replace image';
+                replace.addEventListener('click', () => openAsset(imageField, value => { row.image = value; sync(); })); stage.append(replace);
+                const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'text-button'; remove.textContent = 'Remove image';
+                remove.addEventListener('click', () => { row.image = null; sync(); render(); }); stage.append(remove);
+            }
+            thumbnails.querySelectorAll('[data-image-slot]').forEach(button => button.setAttribute('aria-pressed', String(Number(button.dataset.imageSlot) === index)));
+        };
+        editor.slots.forEach((row, index) => {
+            const slot = document.createElement('div'); slot.className = 'module-column';
+            const button = document.createElement('button'); button.type = 'button'; button.className = 'multiple-editor-thumbnail'; button.dataset.imageSlot = index;
+            button.setAttribute('aria-label', `Select image ${index + 1}${row.image ? '' : ' (empty)'}`);
+            const asset = assetById(row.image);
+            button.innerHTML = asset ? `<img src="${esc(asset.url)}" alt="" style="filter:${row.image_apply_filters !== false ? filterCss(state.image_filters) : 'none'}">` : '<span aria-hidden="true">＋</span>';
+            button.addEventListener('click', () => select(index));
+            slot.append(button, renderField(captionField, row.caption, value => { row.caption = value; sync(); }, { module, row }));
+            thumbnails.append(slot);
+        });
+        fields.append(stage, copy, thumbnails);
+        select(editor.selected);
+    }
+
+    // Keep the existing field controls and save handlers, grouping them like the reference forms.
+    function arrangeModuleFields(fields, type) {
+        const layouts = {
+            single_left_image: [['image'], ['headline', 'body_html']],
+            single_right_image: [['headline', 'body_html'], ['image']],
+            single_image_highlights: [['image'], ['sections'], ['highlights_headline', 'bullets']],
+            single_image_sidebar: [['primary_image', 'image_caption'], ['headline', 'subheadline', 'body_html', 'bullets'], ['sidebar_image', 'sidebar_headline', 'sidebar_body_html']],
+            single_image_specs_detail: [['image'], ['sections']],
+            dark_text_overlay: [['background'], ['headline', 'body_html']],
+            light_text_overlay: [['background'], ['headline', 'body_html']],
+        };
+        if (!layouts[type]) return;
+        const group = document.createElement('div');
+        group.className = `module-layout module-layout-${type}`;
+        layouts[type].forEach(keys => {
+            const column = document.createElement('div'); column.className = 'module-column';
+            keys.forEach(key => {
+                const control = [...fields.children].find(child => child.dataset.fieldKey === key || child.dataset.repeaterKey === key);
+                if (control) column.append(control);
+            });
+            group.append(column);
+        });
+        fields.append(group);
+    }
+
     function renderField(field, value, onChange, context = {}) {
         const wrapper = document.createElement('div'); wrapper.className = `module-field ${['richtext', 'image'].includes(field.type) ? 'full' : ''}`;
+        wrapper.dataset.fieldKey = field.key;
         const required = field.required ? ' *' : '';
         if (field.type === 'checkbox') {
             wrapper.innerHTML = `<label class="check-row"><input type="checkbox" ${value ? 'checked' : ''}> ${esc(field.label)}</label>`;
@@ -162,7 +244,10 @@ if (dataNode) {
             button.style.setProperty('--image-target-height', `${field.height}px`);
             button.style.setProperty('--image-aspect-ratio', `${field.width} / ${field.height}`);
             button.innerHTML = asset ? `<img src="${esc(asset.url)}" alt="${esc(asset.alt_text || '')}">` : `<span><span class="image-symbol">▧</span><strong>${field.width} × ${field.height}</strong><small>Click to add image</small></span>`;
-            button.addEventListener('click', () => openAsset(field, (id) => onChange(id)));
+            button.addEventListener('click', () => {
+                openAsset(field, (id) => onChange(id));
+                if (context.editExisting && asset) showAssetDetails(asset);
+            });
             button.addEventListener('dragover', (event) => { event.preventDefault(); button.classList.add('dragging-over'); });
             button.addEventListener('dragleave', () => button.classList.remove('dragging-over'));
             button.addEventListener('drop', (event) => { event.preventDefault(); button.classList.remove('dragging-over'); const file = event.dataTransfer.files?.[0]; if (!file) return; state.activeAsset = { field, callback: (id) => onChange(id) }; openNewFile(file); });
@@ -204,7 +289,10 @@ if (dataNode) {
 
     function renderRepeater(module, repeater) {
         const wrapper = document.createElement('section'); wrapper.className = 'module-repeater';
+        wrapper.dataset.repeaterKey = repeater.key;
+        wrapper.classList.toggle('fixed-repeater', repeater.min === repeater.max);
         const rows = Array.isArray(module.content[repeater.key]) ? module.content[repeater.key] : (module.content[repeater.key] = []);
+        wrapper.style.setProperty('--repeat-count', Math.max(1, rows.length));
         wrapper.innerHTML = `<div class="repeater-head"><strong>${esc(repeater.label)} <small>(${repeater.min || 0}–${repeater.max})</small></strong><button type="button" class="button button-secondary" data-add-row ${rows.length >= repeater.max ? 'disabled' : ''}>＋ Add</button></div><div class="repeater-rows"></div>`;
         const rowContainer = wrapper.querySelector('.repeater-rows');
         rows.forEach((row, rowIndex) => {
@@ -573,7 +661,7 @@ if (dataNode) {
             case 'image_header_text':
                 return `<section class="amazon-module amazon-header-image">${previewHeading(c.top_headline)}${previewImage(c.image, '', c.image_apply_filters !== false)}<div>${previewHeading(c.headline)}${previewRich(c.body_html)}</div></section>`;
             case 'multiple_image_a':
-                return `<section class="amazon-module amazon-multiple"><div class="multiple-main">${previewImage(items[0]?.image, '', items[0]?.image_apply_filters !== false)}</div><div class="multiple-copy">${previewHeading(c.headline)}${previewRich(c.description_html)}<div class="multiple-thumbs">${items.map((item) => `<figure>${previewImage(item.image, '', item.image_apply_filters !== false)}<figcaption>${esc(item.caption || '')}</figcaption></figure>`).join('')}</div></div></section>`;
+                return renderMultipleImagePreview(items, previewHeading(c.headline) + previewRich(c.description_html), item => previewImage(item.image, '', item.image_apply_filters !== false));
             case 'product_description_text':
                 return `<section class="amazon-module amazon-product-description">${previewRich(c.body_html)}</section>`;
             case 'single_image_highlights':

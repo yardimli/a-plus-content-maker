@@ -5,6 +5,7 @@
     $editorAssets = $isTemplateEditor ? $assets : $project->assets;
 @endphp
 @extends('layouts.app')
+@section('body-class', 'editor-page')
 @section('title', $editorEntity->name ?: 'New template') @section('page-title', $editorEntity->name ?: 'New template')
 @section('content')
 <div id="builder" class="builder {{ $isTemplateEditor ? 'template-builder' : '' }}" data-project="{{ $isTemplateEditor ? ($template->slug ?: 'new-template') : $project->uuid }}">
